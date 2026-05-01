@@ -38,7 +38,7 @@ export default function RegelverkPage() {
               <p>{item.summary}</p>
               {item.quote && (
                 <blockquote className="rounded-md border-l-4 border-brand-600 bg-brand-50 px-3 py-2 italic text-slate-800">
-                  "{item.quote}"
+                  &quot;{item.quote}&quot;
                 </blockquote>
               )}
               <a

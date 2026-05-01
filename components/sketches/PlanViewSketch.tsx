@@ -83,7 +83,7 @@ export function PlanViewSketch({
   const safeWidth = Math.max(topWidth, 0.5);
   const safeMassDistance = Math.max(massDistance, 0);
   const trafficSide = hasInstallations ? "Trafikkert side / infrastruktur" : "Arbeidsområde uten registrert infrastruktur";
-  const getPoint = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+  const getPoint = (event: { clientX: number; clientY: number }) => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
