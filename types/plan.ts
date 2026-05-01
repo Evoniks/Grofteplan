@@ -14,7 +14,14 @@ export const sikringsmetoder = [
   "annen avstivning"
 ] as const;
 export const skisseSymboler = ["sirkel", "trekant", "firkant"] as const;
-export const skisseMaler = ["standard", "kompakt", "kontroll"] as const;
+export const skisseMaler = [
+  "template-01-skraasider",
+  "template-02-groftekasse",
+  "template-03-spunt",
+  "template-04-avstiving-horisontal",
+  "template-05-dyp-spunt-avstiving",
+  "template-06-trafikkert-omraade"
+] as const;
 
 export type Jordart = (typeof jordarter)[number];
 export type Sikringsmetode = (typeof sikringsmetoder)[number];

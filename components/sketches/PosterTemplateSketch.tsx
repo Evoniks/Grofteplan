@@ -1,7 +1,26 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { SkisseMal } from "@/types/plan";
+
+const FALLBACK_TEMPLATE_DATA_URI =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
+    <rect width="1600" height="900" fill="#f3f4f6" />
+    <rect x="24" y="24" width="520" height="56" fill="#ffffff" stroke="#111827" stroke-width="2"/>
+    <text x="42" y="60" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#111827">GENERERT SKISSE - FALLBACK MAL</text>
+    <rect x="24" y="120" width="1552" height="340" fill="#ffffff" stroke="#9ca3af" />
+    <rect x="24" y="492" width="1552" height="300" fill="#ffffff" stroke="#9ca3af" />
+    <text x="40" y="160" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#334155">TVERRPROFIL</text>
+    <text x="40" y="532" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#334155">PLAN (OVENFRA)</text>
+    <line x1="120" y1="260" x2="1480" y2="260" stroke="#334155" stroke-width="4" />
+    <polygon points="620,260 980,260 900,420 700,420" fill="#dbeafe" stroke="#1e3a8a" stroke-width="4" />
+    <rect x="240" y="600" width="1120" height="100" rx="12" fill="#bfdbfe" stroke="#1e3a8a" stroke-width="4"/>
+    <line x1="240" y1="650" x2="1360" y2="650" stroke="#60a5fa" stroke-width="3" stroke-dasharray="12 8"/>
+    <text x="40" y="850" font-family="Arial, sans-serif" font-size="20" fill="#475569">Legg inn SVG-maler i public/templates for full grafisk kvalitet.</text>
+  </svg>
+`);
 
 type Props = {
   depth: number;
@@ -14,6 +33,15 @@ type Props = {
 };
 
 export function PosterTemplateSketch({ depth, bottomWidth, topWidth, length, massDistance, method, template }: Props) {
+  const templateSvgSrc = `/templates/${template}.svg`;
+  const templatePngSrc = `/templates/${template}.png`;
+  const fallbackImageSrc = FALLBACK_TEMPLATE_DATA_URI;
+  const [displaySrc, setDisplaySrc] = useState(templateSvgSrc);
+
+  useEffect(() => {
+    setDisplaySrc(templateSvgSrc);
+  }, [templateSvgSrc]);
+
   const labels = useMemo(
     () => {
       const base = [
@@ -73,7 +101,7 @@ export function PosterTemplateSketch({ depth, bottomWidth, topWidth, length, mas
       }
       ];
 
-      if (template === "kompakt") {
+      if (template === "template-02-groftekasse") {
         return base.map((item) => ({
           ...item,
           left: `${Number.parseFloat(item.left) + (item.key === "length" ? -4 : 0)}%`,
@@ -81,7 +109,7 @@ export function PosterTemplateSketch({ depth, bottomWidth, topWidth, length, mas
         }));
       }
 
-      if (template === "kontroll") {
+      if (template === "template-05-dyp-spunt-avstiving") {
         return base.map((item) => ({
           ...item,
           left: `${Number.parseFloat(item.left) + (item.key === "method" ? -5 : 1)}%`,
@@ -94,20 +122,35 @@ export function PosterTemplateSketch({ depth, bottomWidth, topWidth, length, mas
     [bottomWidth, depth, length, massDistance, method, template, topWidth]
   );
 
-  const templateTitle =
-    template === "kompakt"
-      ? "Generert skisse (kompakt plakatstil)"
-      : template === "kontroll"
-        ? "Generert skisse (kontroll plakatstil)"
-        : "Generert skisse (proff plakatstil)";
+  const templateTitleMap: Record<SkisseMal, string> = {
+    "template-01-skraasider": "Generert skisse (1. Skrå sider)",
+    "template-02-groftekasse": "Generert skisse (2. Grøftekasse)",
+    "template-03-spunt": "Generert skisse (3. Spunt)",
+    "template-04-avstiving-horisontal": "Generert skisse (4. Avstiving horisontal)",
+    "template-05-dyp-spunt-avstiving": "Generert skisse (5. Dyp grøft spunt/avstiving)",
+    "template-06-trafikkert-omraade": "Generert skisse (6. Trafikkert område)"
+  };
+  const templateTitle = templateTitleMap[template];
 
   const drawPosterToCanvas = async () => {
-    const img = new Image();
-    img.src = "/api/reference-sketch";
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("Kunne ikke laste referansebilde"));
-    });
+    const loadImage = (src: string) =>
+      new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error(`Kunne ikke laste ${src}`));
+        image.src = src;
+      });
+
+    let img: HTMLImageElement | null = null;
+    for (const src of [templateSvgSrc, templatePngSrc, fallbackImageSrc]) {
+      try {
+        img = await loadImage(src);
+        break;
+      } catch {
+        // Try next candidate source.
+      }
+    }
+    if (!img) throw new Error("Kunne ikke laste mal (hverken SVG, PNG eller fallback)");
 
     const canvas = document.createElement("canvas");
     canvas.width = img.naturalWidth || 1024;
@@ -196,7 +239,23 @@ export function PosterTemplateSketch({ depth, bottomWidth, topWidth, length, mas
         </div>
       </div>
       <div className="relative overflow-hidden rounded-md border border-slate-400 bg-slate-100">
-        <img src="/api/reference-sketch" alt="Referanseskisse for grøfteplan" className="h-auto w-full" />
+        <img
+          src={displaySrc}
+          alt="Skissemal for grøfteplan"
+          className="h-auto w-full"
+          onError={(event) => {
+            const current = event.currentTarget.src;
+            if (current.includes(".svg")) {
+              setDisplaySrc(templatePngSrc);
+              return;
+            }
+            if (current.includes(".png")) {
+              setDisplaySrc(fallbackImageSrc);
+              return;
+            }
+            event.currentTarget.onerror = null;
+          }}
+        />
         <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
           {labels.map((label) => (
             <line

@@ -4,12 +4,12 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { planSchema, type PlanSchema } from "@/lib/schema";
-import type { PlanData } from "@/types/plan";
+import type { PlanData, SkisseMal } from "@/types/plan";
 import { evaluateRules } from "@/lib/rule-engine";
 import { loadPlanDraft, savePlanDraft } from "@/lib/plan-repository";
 import { CrossSectionCanvasSketch } from "@/components/sketches/CrossSectionCanvasSketch";
 import { PlanViewSketch } from "@/components/sketches/PlanViewSketch";
-import { PosterTemplateSketch } from "@/components/sketches/PosterTemplateSketch";
+import { TrenchSketch } from "@/components/sketches/TrenchSketch";
 import { PdfDownloadButton } from "@/components/pdf/PdfDownloadButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -86,7 +86,7 @@ const defaultValues: PlanData = {
   skisseLedningLabel: "Rør/ledning i bunn",
   skisseMasserLabel: "Gravemasser",
   skisseVisSymboler: true,
-  skisseMal: "standard",
+  skisseMal: "template-01-skraasider",
   skisseLedningSymbol: "sirkel",
   skisseMasserSymbol: "firkant",
   skisseDybdeMeter: 1.2,
@@ -95,6 +95,39 @@ const defaultValues: PlanData = {
   skisseMasseAvstandMeter: 1,
   skisseLengdeMeter: 20
 };
+
+const sketchTemplateOptions: { id: SkisseMal; title: string; desc: string }[] = [
+  {
+    id: "template-01-skraasider",
+    title: "1. Grøft med skrå sider",
+    desc: "Standard prinsipp med skrå grøftesider."
+  },
+  {
+    id: "template-02-groftekasse",
+    title: "2. Grøft med grøftekasser",
+    desc: "Fokus på kasse og arbeid i sikret grøft."
+  },
+  {
+    id: "template-03-spunt",
+    title: "3. Grøft med spunt",
+    desc: "Vertikal sikring med spunt."
+  },
+  {
+    id: "template-04-avstiving-horisontal",
+    title: "4. Avstiving horisontal",
+    desc: "Horisontal avstiving uten kasse."
+  },
+  {
+    id: "template-05-dyp-spunt-avstiving",
+    title: "5. Dyp grøft med spunt/avstiving",
+    desc: "For dypere grøfter og høyere risiko."
+  },
+  {
+    id: "template-06-trafikkert-omraade",
+    title: "6. Trafikkert område",
+    desc: "Ekstra fokus på avsperring og kjøremønster."
+  }
+];
 
 type BoolFieldProps = {
   label: string;
@@ -488,11 +521,7 @@ export function PlanWizard() {
               name="skisseMal"
               render={({ field }) => (
                 <div className="grid gap-2 md:grid-cols-3">
-                  {[
-                    { id: "standard", title: "Standard", desc: "Balansert oppsett for vanlig dokumentasjon." },
-                    { id: "kompakt", title: "Kompakt", desc: "Tettere layout med fokus på nøkkeltall." },
-                    { id: "kontroll", title: "Kontroll", desc: "Ekstra tydelig på sikkerhet og kontrollpunkter." }
-                  ].map((option) => {
+                  {sketchTemplateOptions.map((option) => {
                     const active = field.value === option.id;
                     return (
                       <button
@@ -573,14 +602,13 @@ export function PlanWizard() {
         </CardContent>
       </Card>
 
-      <PosterTemplateSketch
+      <TrenchSketch
         depth={allValues.skisseDybdeMeter}
         bottomWidth={allValues.skisseBreddeBunnMeter}
         topWidth={allValues.skisseBreddeToppMeter}
-        length={allValues.skisseLengdeMeter}
+        routeLength={allValues.skisseLengdeMeter}
         massDistance={allValues.skisseMasseAvstandMeter}
         method={allValues.sikringsmetode}
-        template={allValues.skisseMal}
       />
 
       <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

@@ -31,10 +31,6 @@ const INITIAL_OFFSETS: Offsets = {
   pipe: { x: 0, y: 0 }
 };
 
-function isDragKey(value: string): value is DragKey {
-  return DRAG_KEYS.includes(value as DragKey);
-}
-
 function clampOffset(value: Offset, key: DragKey): Offset {
   if (key === "pipe") {
     return {
@@ -114,6 +110,82 @@ function drawSoilTexture(ctx: CanvasRenderingContext2D, x: number, y: number, w:
     ctx.stroke();
   }
   ctx.restore();
+}
+
+function drawLadder(ctx: CanvasRenderingContext2D, xTop: number, yTop: number, xBottom: number, yBottom: number) {
+  const dx = xBottom - xTop;
+  const dy = yBottom - yTop;
+  const length = Math.hypot(dx, dy);
+  if (length < 10) return;
+
+  const nx = -dy / length;
+  const ny = dx / length;
+  const rail = 7;
+  const leftTopX = xTop + nx * rail;
+  const leftTopY = yTop + ny * rail;
+  const leftBottomX = xBottom + nx * rail;
+  const leftBottomY = yBottom + ny * rail;
+  const rightTopX = xTop - nx * rail;
+  const rightTopY = yTop - ny * rail;
+  const rightBottomX = xBottom - nx * rail;
+  const rightBottomY = yBottom - ny * rail;
+
+  ctx.strokeStyle = "#4b5563";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(leftTopX, leftTopY);
+  ctx.lineTo(leftBottomX, leftBottomY);
+  ctx.moveTo(rightTopX, rightTopY);
+  ctx.lineTo(rightBottomX, rightBottomY);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#9ca3af";
+  ctx.lineWidth = 2;
+  const stepCount = Math.max(4, Math.floor(length / 24));
+  for (let i = 1; i < stepCount; i += 1) {
+    const t = i / stepCount;
+    const sx = leftTopX + (leftBottomX - leftTopX) * t;
+    const sy = leftTopY + (leftBottomY - leftTopY) * t;
+    const ex = rightTopX + (rightBottomX - rightTopX) * t;
+    const ey = rightTopY + (rightBottomY - rightTopY) * t;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+  }
+}
+
+function drawSheetPile(ctx: CanvasRenderingContext2D, x: number, yTop: number, yBottom: number) {
+  ctx.fillStyle = "#64748b";
+  ctx.fillRect(x - 4, yTop, 8, yBottom - yTop);
+  ctx.strokeStyle = "#334155";
+  ctx.lineWidth = 1;
+  for (let y = yTop + 8; y < yBottom; y += 10) {
+    ctx.beginPath();
+    ctx.moveTo(x - 4, y);
+    ctx.lineTo(x + 4, y);
+    ctx.stroke();
+  }
+}
+
+function drawTrenchBox(ctx: CanvasRenderingContext2D, leftX: number, rightX: number, yTop: number, yBottom: number) {
+  ctx.fillStyle = "#a78bfa";
+  ctx.globalAlpha = 0.16;
+  ctx.fillRect(leftX, yTop, rightX - leftX, yBottom - yTop);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "#6d28d9";
+  ctx.lineWidth = 2.2;
+  ctx.strokeRect(leftX, yTop, rightX - leftX, yBottom - yTop);
+  ctx.strokeStyle = "#7c3aed";
+  ctx.lineWidth = 3;
+  const braceY = [0.26, 0.5, 0.74];
+  braceY.forEach((ratio) => {
+    const y = yTop + (yBottom - yTop) * ratio;
+    ctx.beginPath();
+    ctx.moveTo(leftX + 6, y);
+    ctx.lineTo(rightX - 6, y);
+    ctx.stroke();
+  });
 }
 
 export function CrossSectionCanvasSketch({
@@ -219,8 +291,16 @@ export function CrossSectionCanvasSketch({
     const topWidthPx = 210 + (Math.min(safeTop, maxTopWidth) / maxTopWidth) * 190;
     const bottomWidthPx = Math.max(86, topWidthPx * Math.min(0.8, safeBottom / safeTop));
 
+    const normalizedMethod = method.toLowerCase();
+    const isTrenchBox = normalizedMethod.includes("grøftekasse");
+    const isSheetPile = normalizedMethod.includes("spunt");
+    const isBraced = normalizedMethod.includes("avstivning") || normalizedMethod.includes("avstivet");
+    const isSloped = !isTrenchBox && !isSheetPile && !isBraced;
+
     const topLeftX = centerX - topWidthPx / 2;
     const topRightX = centerX + topWidthPx / 2;
+    const verticalTopLeftX = centerX - Math.max(topWidthPx * 0.38, bottomWidthPx * 0.6);
+    const verticalTopRightX = centerX + Math.max(topWidthPx * 0.38, bottomWidthPx * 0.6);
     const bottomLeftX = centerX - bottomWidthPx / 2;
     const bottomRightX = centerX + bottomWidthPx / 2;
     const bottomY = groundY + depthPx;
@@ -235,8 +315,15 @@ export function CrossSectionCanvasSketch({
     const excavatorY = excavatorBaseY + offsets.excavator.y;
     const pipeX = pipeXBase + offsets.pipe.x;
     const pipeY = pipeYBase + offsets.pipe.y;
-    const slopeRule =
-      method === "skrå gravesider" ? (safeDepth <= 2 ? "Dybde x 0,5 (ca. 63°)" : "Dybde x 0,75 (ca. 53°)") : "Avstivet grøft";
+    const slopeRule = isSloped
+      ? safeDepth <= 2
+        ? "Dybde x 0,5 (ca. 63°)"
+        : "Dybde x 0,75 (ca. 53°)"
+      : isTrenchBox
+        ? "Sikret med grøftekasse"
+        : isSheetPile
+          ? "Sikret med spunt"
+          : "Sikret med avstiving";
 
     // Background
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
@@ -268,18 +355,29 @@ export function CrossSectionCanvasSketch({
     ctx.strokeStyle = "#1e3a8a";
     ctx.lineWidth = 2.2;
     ctx.beginPath();
-    ctx.moveTo(topLeftX, groundY);
-    ctx.lineTo(topRightX, groundY);
-    ctx.lineTo(bottomRightX, bottomY);
-    ctx.lineTo(bottomLeftX, bottomY);
+    if (isSloped) {
+      ctx.moveTo(topLeftX, groundY);
+      ctx.lineTo(topRightX, groundY);
+      ctx.lineTo(bottomRightX, bottomY);
+      ctx.lineTo(bottomLeftX, bottomY);
+    } else {
+      ctx.moveTo(verticalTopLeftX, groundY);
+      ctx.lineTo(verticalTopRightX, groundY);
+      ctx.lineTo(verticalTopRightX, bottomY);
+      ctx.lineTo(verticalTopLeftX, bottomY);
+    }
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
     ctx.strokeStyle = "#b8a88d";
     ctx.lineWidth = 1;
     for (let y = groundY + 8; y < bottomY - 8; y += 8) {
-      const leftX = topLeftX + ((bottomLeftX - topLeftX) * (y - groundY)) / (bottomY - groundY);
-      const rightX = topRightX + ((bottomRightX - topRightX) * (y - groundY)) / (bottomY - groundY);
+      const leftX = isSloped
+        ? topLeftX + ((bottomLeftX - topLeftX) * (y - groundY)) / (bottomY - groundY)
+        : verticalTopLeftX;
+      const rightX = isSloped
+        ? topRightX + ((bottomRightX - topRightX) * (y - groundY)) / (bottomY - groundY)
+        : verticalTopRightX;
       ctx.beginPath();
       ctx.moveTo(leftX + 3, y);
       ctx.lineTo(leftX + 11, y + 5);
@@ -287,7 +385,28 @@ export function CrossSectionCanvasSketch({
       ctx.lineTo(rightX - 11, y + 5);
       ctx.stroke();
     }
-    drawSoilTexture(ctx, bottomLeftX + 2, bottomY - 18, bottomRightX - bottomLeftX - 4, 18);
+    const trenchBottomLeft = isSloped ? bottomLeftX : verticalTopLeftX;
+    const trenchBottomRight = isSloped ? bottomRightX : verticalTopRightX;
+    drawSoilTexture(ctx, trenchBottomLeft + 2, bottomY - 18, trenchBottomRight - trenchBottomLeft - 4, 18);
+    if (isTrenchBox) {
+      drawTrenchBox(ctx, trenchBottomLeft + 2, trenchBottomRight - 2, groundY + 2, bottomY - 2);
+    }
+    if (isSheetPile) {
+      drawSheetPile(ctx, trenchBottomLeft + 2, groundY - 2, bottomY + 2);
+      drawSheetPile(ctx, trenchBottomRight - 2, groundY - 2, bottomY + 2);
+    }
+    if (isBraced && !isTrenchBox) {
+      ctx.strokeStyle = "#6b7280";
+      ctx.lineWidth = 3;
+      const braceY = [0.3, 0.5, 0.7];
+      braceY.forEach((ratio) => {
+        const y = groundY + (bottomY - groundY) * ratio;
+        ctx.beginPath();
+        ctx.moveTo(trenchBottomLeft + 8, y);
+        ctx.lineTo(trenchBottomRight - 8, y);
+        ctx.stroke();
+      });
+    }
 
     // Pipe symbol
     drawSymbol(ctx, pipeSymbol, pipeX, pipeY, 18, "#334155");
@@ -310,30 +429,39 @@ export function CrossSectionCanvasSketch({
     // Top width
     ctx.strokeStyle = "#64748b";
     ctx.lineWidth = 1.5;
-    dashedLine(ctx, topLeftX, groundY + 14, topRightX, groundY + 14);
+    dashedLine(ctx, isSloped ? topLeftX : verticalTopLeftX, groundY + 14, isSloped ? topRightX : verticalTopRightX, groundY + 14);
     ctx.fillStyle = "#334155";
     ctx.font = "12px sans-serif";
     ctx.fillText(`Bredde topp: ${safeTop.toFixed(2)} m`, topLeftX + 4, groundY + 32);
 
     // Bottom width
-    dashedLine(ctx, bottomLeftX, bottomY + 22, bottomRightX, bottomY + 22);
-    ctx.fillText(`Bredde bunn: ${safeBottom.toFixed(2)} m`, bottomLeftX + 4, bottomY + 40);
+    dashedLine(ctx, trenchBottomLeft, bottomY + 22, trenchBottomRight, bottomY + 22);
+    ctx.fillText(`Bredde bunn: ${safeBottom.toFixed(2)} m`, trenchBottomLeft + 4, bottomY + 40);
 
     // Depth indicator
     ctx.strokeStyle = "#ef4444";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(topLeftX - 36, groundY);
-    ctx.lineTo(topLeftX - 36, bottomY);
+    const depthRefX = (isSloped ? topLeftX : verticalTopLeftX) - 36;
+    ctx.moveTo(depthRefX, groundY);
+    ctx.lineTo(depthRefX, bottomY);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(topLeftX - 40, groundY);
-    ctx.lineTo(topLeftX - 32, groundY);
-    ctx.moveTo(topLeftX - 40, bottomY);
-    ctx.lineTo(topLeftX - 32, bottomY);
+    ctx.moveTo(depthRefX - 4, groundY);
+    ctx.lineTo(depthRefX + 4, groundY);
+    ctx.moveTo(depthRefX - 4, bottomY);
+    ctx.lineTo(depthRefX + 4, bottomY);
     ctx.stroke();
     ctx.fillStyle = "#991b1b";
-    ctx.fillText(`Dybde: ${safeDepth.toFixed(2)} m`, topLeftX - 126, groundY + depthPx * 0.5);
+    ctx.fillText(`Dybde: ${safeDepth.toFixed(2)} m`, depthRefX - 90, groundY + depthPx * 0.5);
+
+    // Ladder symbol (real rails + steps)
+    const ladderTopX = trenchBottomRight + (isSloped ? 42 : -12);
+    const ladderBottomX = trenchBottomRight - (isSloped ? 8 : 14);
+    drawLadder(ctx, ladderTopX, groundY - 2, ladderBottomX, bottomY - 8);
+    ctx.fillStyle = "#111827";
+    ctx.font = "11px sans-serif";
+    ctx.fillText("Stige", ladderTopX + 16, bottomY - 10);
 
     // Excavator (styled)
     ctx.fillStyle = "#f59e0b";
@@ -422,8 +550,8 @@ export function CrossSectionCanvasSketch({
     drawNumberMarker(ctx, 1, topLeftX - 54, groundY - 56);
     drawNumberMarker(ctx, 2, postX + 20, groundY - 46);
     drawNumberMarker(ctx, 3, excavatorX + 86, excavatorY - 34);
-    drawNumberMarker(ctx, 4, bottomRightX + 18, bottomY - 42);
-    drawNumberMarker(ctx, 5, bottomRightX + 86, groundY + 104);
+    drawNumberMarker(ctx, 4, trenchBottomRight + 18, bottomY - 42);
+    drawNumberMarker(ctx, 5, trenchBottomRight + 86, groundY + 104);
     drawNumberMarker(ctx, 6, pipeX - 22, pipeY);
 
     dragBoundsRef.current = {
