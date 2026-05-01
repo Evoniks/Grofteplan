@@ -22,21 +22,27 @@ type IconProps = {
   height: number;
   selected?: boolean;
   rotation?: number;
+  meta?: {
+    slopeRatio?: number;
+    lengthMeters?: number;
+  };
 };
 
-function IconFrame({ children, x, y, width, height, rotation = 0 }: IconProps & { children: ReactNode }) {
+function IconFrame({ children, x, y, width, height, rotation = 0, withShadow = true }: IconProps & { children: ReactNode; withShadow?: boolean }) {
   const cx = x + width / 2;
   const cy = y + height / 2;
   return (
     <g transform={`rotate(${rotation} ${cx} ${cy})`}>
-      <ellipse cx={cx} cy={y + height + 6} rx={width * 0.38} ry={Math.max(4, height * 0.06)} fill="#0f172a1f" />
+      {withShadow && <ellipse cx={cx} cy={y + height + 6} rx={width * 0.38} ry={Math.max(4, height * 0.06)} fill="#0f172a1f" />}
       {children}
     </g>
   );
 }
 
 export function TrenchCrossIcon(props: IconProps) {
-  const { x, y, width, height } = props;
+  const { x, y, width, height, meta } = props;
+  const slope = Math.max(0.4, Math.min(2, meta?.slopeRatio ?? 1));
+  const topInset = Math.max(width * 0.02, Math.min(width * 0.32, width * (0.34 - slope * 0.1)));
   return (
     <IconFrame {...props}>
       <defs>
@@ -46,7 +52,7 @@ export function TrenchCrossIcon(props: IconProps) {
         </linearGradient>
       </defs>
       <polygon
-        points={`${x + width * 0.16},${y + height * 0.04} ${x + width * 0.84},${y + height * 0.04} ${x + width * 0.63},${y + height * 0.95} ${x + width * 0.37},${y + height * 0.95}`}
+        points={`${x + topInset},${y + height * 0.04} ${x + width - topInset},${y + height * 0.04} ${x + width * 0.63},${y + height * 0.95} ${x + width * 0.37},${y + height * 0.95}`}
         fill={`url(#trench-cross-${x}-${y})`}
         stroke="#0f172a"
         strokeWidth={2.5}
@@ -56,12 +62,25 @@ export function TrenchCrossIcon(props: IconProps) {
 }
 
 export function TrenchPlanIcon(props: IconProps) {
-  const { x, y, width, height } = props;
+  const { x, y, width, height, meta } = props;
+  const lengthMeters = Math.max(1, Math.round(meta?.lengthMeters ?? width / 50));
+  const markers = Array.from({ length: Math.floor(lengthMeters / 5) }, (_, i) => (i + 1) * 5);
   return (
     <IconFrame {...props}>
       <rect x={x} y={y} width={width} height={height} rx={12} fill="#bfdbfe" stroke="#0f172a" strokeWidth={2.5} />
       <line x1={x + 8} y1={y + height / 2} x2={x + width - 8} y2={y + height / 2} stroke="#60a5fa" strokeWidth={2} strokeDasharray="8 6" />
       <line x1={x + 8} y1={y + height * 0.26} x2={x + width - 8} y2={y + height * 0.26} stroke="#ffffff90" strokeWidth={2} />
+      {markers.map((meter) => {
+        const px = x + (meter / lengthMeters) * width;
+        return (
+          <g key={meter}>
+            <line x1={px} y1={y + height * 0.1} x2={px} y2={y + height * 0.9} stroke="#1e3a8a" strokeWidth={1.2} strokeDasharray="3 3" />
+            <text x={px} y={y + height * 0.18} fill="#1e3a8a" fontSize={10} textAnchor="middle">
+              {meter}m
+            </text>
+          </g>
+        );
+      })}
     </IconFrame>
   );
 }
@@ -70,14 +89,23 @@ export function ExcavatorSideIcon(props: IconProps) {
   const { x, y, width, height } = props;
   return (
     <IconFrame {...props}>
-      <rect x={x + width * 0.09} y={y + height * 0.18} width={width * 0.36} height={height * 0.38} fill="#f59e0b" stroke="#111827" strokeWidth={2} />
-      <rect x={x + width * 0.16} y={y + height * 0.57} width={width * 0.54} height={height * 0.2} fill="#475569" stroke="#111827" strokeWidth={2} />
-      <rect x={x + width * 0.32} y={y + height * 0.24} width={width * 0.12} height={height * 0.22} fill="#93c5fd" stroke="#1f2937" strokeWidth={1.5} />
-      <line x1={x + width * 0.47} y1={y + height * 0.24} x2={x + width * 0.83} y2={y + height * 0.08} stroke="#374151" strokeWidth={5} />
-      <line x1={x + width * 0.83} y1={y + height * 0.08} x2={x + width * 0.95} y2={y + height * 0.16} stroke="#374151" strokeWidth={5} />
+      <rect x={x + width * 0.08} y={y + height * 0.56} width={width * 0.66} height={height * 0.24} rx={height * 0.08} fill="#1f2937" stroke="#0f172a" strokeWidth={2} />
+      {Array.from({ length: 8 }).map((_, i) => (
+        <line
+          key={i}
+          x1={x + width * 0.11 + i * (width * 0.075)}
+          y1={y + height * 0.585}
+          x2={x + width * 0.11 + i * (width * 0.075)}
+          y2={y + height * 0.78}
+          stroke="#64748b"
+          strokeWidth={1.5}
+        />
+      ))}
+      <rect x={x + width * 0.14} y={y + height * 0.19} width={width * 0.4} height={height * 0.34} rx={6} fill="#f59e0b" stroke="#111827" strokeWidth={2} />
+      <rect x={x + width * 0.31} y={y + height * 0.25} width={width * 0.16} height={height * 0.21} fill="#93c5fd" stroke="#1f2937" strokeWidth={1.5} />
+      <line x1={x + width * 0.54} y1={y + height * 0.27} x2={x + width * 0.84} y2={y + height * 0.1} stroke="#374151" strokeWidth={6} />
+      <line x1={x + width * 0.84} y1={y + height * 0.1} x2={x + width * 0.96} y2={y + height * 0.2} stroke="#374151" strokeWidth={5} />
       <line x1={x + width * 0.13} y1={y + height * 0.26} x2={x + width * 0.41} y2={y + height * 0.26} stroke="#ffffff95" strokeWidth={2} />
-      <circle cx={x + width * 0.26} cy={y + height * 0.79} r={height * 0.08} fill="#0f172a" />
-      <circle cx={x + width * 0.56} cy={y + height * 0.79} r={height * 0.08} fill="#0f172a" />
     </IconFrame>
   );
 }
@@ -111,9 +139,13 @@ export function TruckTopIcon(props: IconProps) {
 export function SpoilPileIcon(props: IconProps) {
   const { x, y, width, height } = props;
   return (
-    <IconFrame {...props}>
-      <ellipse cx={x + width / 2} cy={y + height * 0.72} rx={width * 0.48} ry={height * 0.3} fill="#b08968" stroke="#3f3f46" strokeWidth={2} />
-      <ellipse cx={x + width / 2} cy={y + height * 0.62} rx={width * 0.35} ry={height * 0.16} fill="#ffffff33" />
+    <IconFrame {...props} withShadow={false}>
+      <polygon
+        points={`${x + width * 0.36},${y + height * 0.06} ${x + width * 0.64},${y + height * 0.06} ${x + width * 0.86},${y + height * 0.94} ${x + width * 0.14},${y + height * 0.94}`}
+        fill="#b08968"
+        stroke="#3f3f46"
+        strokeWidth={2}
+      />
     </IconFrame>
   );
 }
@@ -121,9 +153,13 @@ export function SpoilPileIcon(props: IconProps) {
 export function SpoilPileLongIcon(props: IconProps) {
   const { x, y, width, height } = props;
   return (
-    <IconFrame {...props}>
-      <rect x={x} y={y + height * 0.24} width={width} height={height * 0.56} rx={height * 0.25} fill="#b08968" stroke="#3f3f46" strokeWidth={2} />
-      <line x1={x + width * 0.08} y1={y + height * 0.36} x2={x + width * 0.9} y2={y + height * 0.36} stroke="#ffffff40" strokeWidth={2} />
+    <IconFrame {...props} withShadow={false}>
+      <polygon
+        points={`${x + width * 0.18},${y + height * 0.06} ${x + width * 0.82},${y + height * 0.06} ${x + width * 0.96},${y + height * 0.94} ${x + width * 0.04},${y + height * 0.94}`}
+        fill="#b08968"
+        stroke="#3f3f46"
+        strokeWidth={2}
+      />
     </IconFrame>
   );
 }
@@ -168,9 +204,20 @@ export function EscapeRouteIcon(props: IconProps) {
   const { x, y, width, height } = props;
   return (
     <IconFrame {...props}>
-      <rect x={x} y={y + height * 0.28} width={width * 0.78} height={height * 0.44} rx={6} fill="#22c55e" stroke="#14532d" strokeWidth={2} />
-      <polygon points={`${x + width * 0.78},${y + height * 0.5} ${x + width * 0.58},${y + height * 0.34} ${x + width * 0.58},${y + height * 0.66}`} fill="#14532d" />
-      <line x1={x + width * 0.08} y1={y + height * 0.4} x2={x + width * 0.52} y2={y + height * 0.4} stroke="#bbf7d0" strokeWidth={2} />
+      <line x1={x + width * 0.24} y1={y + height * 0.18} x2={x + width * 0.14} y2={y + height * 0.86} stroke="#14532d" strokeWidth={4} />
+      <line x1={x + width * 0.64} y1={y + height * 0.18} x2={x + width * 0.54} y2={y + height * 0.86} stroke="#14532d" strokeWidth={4} />
+      {[0, 1, 2].map((i) => (
+        <line
+          key={i}
+          x1={x + width * 0.16}
+          y1={y + height * (0.36 + i * 0.16)}
+          x2={x + width * 0.58}
+          y2={y + height * (0.36 + i * 0.16)}
+          stroke="#22c55e"
+          strokeWidth={4}
+        />
+      ))}
+      <polygon points={`${x + width * 0.92},${y + height * 0.55} ${x + width * 0.7},${y + height * 0.38} ${x + width * 0.7},${y + height * 0.72}`} fill="#14532d" />
     </IconFrame>
   );
 }

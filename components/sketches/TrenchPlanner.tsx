@@ -18,19 +18,21 @@ type CanvasState = { objects: CanvasObjectData[]; measurements: MeasurementData[
 
 const VIEW_W = 1600;
 const VIEW_H = 900;
+const GRID_UNIT = 50; // 1 rute = 1 meter
 
 const presets: Record<ObjectType, Omit<CanvasObjectData, "id" | "x" | "y" | "rotation">> = {
-  trenchCross: { type: "trenchCross", width: 520, height: 250 },
-  trenchPlan: { type: "trenchPlan", width: 740, height: 120 },
-  excavatorSide: { type: "excavatorSide", width: 200, height: 110 },
-  excavatorTop: { type: "excavatorTop", width: 150, height: 86 },
-  truckTop: { type: "truckTop", width: 200, height: 94 },
-  spoilPile: { type: "spoilPile", width: 180, height: 90 },
-  spoilPileLong: { type: "spoilPileLong", width: 260, height: 72 },
-  ladder: { type: "ladder", width: 60, height: 180 },
+  // Målestokk: 50 px = 1 m
+  trenchCross: { type: "trenchCross", width: 500, height: 200 }, // ca 10 m toppbredde, 4 m dybde
+  trenchPlan: { type: "trenchPlan", width: 750, height: 130 }, // 15 m lengde, 2.6 m korridor
+  excavatorSide: { type: "excavatorSide", width: 340, height: 150 }, // ca 6.8 x 3.0 m
+  excavatorTop: { type: "excavatorTop", width: 160, height: 340 }, // ca 3.2 x 6.8 m
+  truckTop: { type: "truckTop", width: 520, height: 130 }, // ca 10.4 x 2.6 m
+  spoilPile: { type: "spoilPile", width: 260, height: 120 },
+  spoilPileLong: { type: "spoilPileLong", width: 360, height: 90 },
+  ladder: { type: "ladder", width: 60, height: 220 },
   barrier: { type: "barrier", width: 30, height: 96 },
-  pipe: { type: "pipe", width: 52, height: 52 },
-  escapeRoute: { type: "escapeRoute", width: 180, height: 64 }
+  pipe: { type: "pipe", width: 56, height: 56 },
+  escapeRoute: { type: "escapeRoute", width: 220, height: 72 }
 };
 
 const crossObjects: ObjectType[] = ["trenchCross", "excavatorSide", "spoilPile", "ladder", "barrier", "pipe"];
@@ -52,21 +54,21 @@ const objectLabels: Record<ObjectType, string> = {
 const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 
 const defaultCrossSectionObjects: CanvasObjectData[] = [
-  { id: uid("trench"), ...presets.trenchCross, x: 420, y: 170, rotation: 0 },
-  { id: uid("spoil"), ...presets.spoilPile, x: 230, y: 125, rotation: 0 },
-  { id: uid("exc"), ...presets.excavatorSide, x: 980, y: 118, rotation: 0 },
-  { id: uid("lad"), ...presets.ladder, x: 760, y: 235, rotation: -14 },
-  { id: uid("bar"), ...presets.barrier, x: 1170, y: 132, rotation: 0 },
-  { id: uid("pipe"), ...presets.pipe, x: 768, y: 350, rotation: 0 }
+  { id: uid("trench"), ...presets.trenchCross, x: 520, y: 210, rotation: 0, meta: { slopeRatio: 1 } },
+  { id: uid("spoil"), ...presets.spoilPile, x: 210, y: 150, rotation: 0 },
+  { id: uid("exc"), ...presets.excavatorSide, x: 1010, y: 120, rotation: 0 },
+  { id: uid("lad"), ...presets.ladder, x: 760, y: 220, rotation: -14 },
+  { id: uid("bar"), ...presets.barrier, x: 1370, y: 150, rotation: 0 },
+  { id: uid("pipe"), ...presets.pipe, x: 742, y: 360, rotation: 0 }
 ];
 
 const defaultPlanObjects: CanvasObjectData[] = [
-  { id: uid("trench"), ...presets.trenchPlan, x: 360, y: 470, rotation: 0 },
-  { id: uid("spoil"), ...presets.spoilPileLong, x: 190, y: 380, rotation: 0 },
-  { id: uid("exc"), ...presets.excavatorTop, x: 980, y: 405, rotation: 0 },
-  { id: uid("truck"), ...presets.truckTop, x: 990, y: 625, rotation: 180 },
-  { id: uid("bar"), ...presets.barrier, x: 1210, y: 380, rotation: 0 },
-  { id: uid("escape"), ...presets.escapeRoute, x: 720, y: 628, rotation: 0 }
+  { id: uid("trench"), ...presets.trenchPlan, x: 360, y: 460, rotation: 0, meta: { lengthMeters: 15 } },
+  { id: uid("spoil"), ...presets.spoilPileLong, x: 160, y: 360, rotation: 0 },
+  { id: uid("exc"), ...presets.excavatorTop, x: 1030, y: 340, rotation: 0 },
+  { id: uid("truck"), ...presets.truckTop, x: 940, y: 620, rotation: 180 },
+  { id: uid("bar"), ...presets.barrier, x: 1310, y: 360, rotation: 0 },
+  { id: uid("escape"), ...presets.escapeRoute, x: 740, y: 640, rotation: 0 }
 ];
 
 const defaultCrossMeasurements: MeasurementData[] = [];
@@ -88,11 +90,14 @@ function getSnapPoints(o: CanvasObjectData): SnapPoint[] {
   const midY = o.y + o.height / 2;
 
   switch (o.type) {
-    case "trenchCross":
+    case "trenchCross": {
+      const slope = Math.max(0.4, Math.min(2, o.meta?.slopeRatio ?? 1));
+      const topInset = Math.max(o.width * 0.02, Math.min(o.width * 0.32, o.width * (0.34 - slope * 0.1)));
       return [
-        { objectId: o.id, type: "trenchEdgeLeft", x: left + o.width * 0.22, y: top + o.height * 0.08 },
-        { objectId: o.id, type: "trenchEdgeRight", x: right - o.width * 0.22, y: top + o.height * 0.08 }
+        { objectId: o.id, type: "trenchEdgeLeft", x: left + topInset, y: top + o.height * 0.08 },
+        { objectId: o.id, type: "trenchEdgeRight", x: right - topInset, y: top + o.height * 0.08 }
       ];
+    }
     case "trenchPlan":
       return [
         { objectId: o.id, type: "trenchEdgeLeft", x: left, y: midY },
@@ -139,12 +144,25 @@ function buildPrintableSvg(state: CanvasState) {
   const measurements = resolveMeasurements(state);
   const printObject = (o: CanvasObjectData) => {
     switch (o.type) {
-      case "trenchCross":
-        return `<polygon points="${o.x + o.width * 0.16},${o.y + o.height * 0.04} ${o.x + o.width * 0.84},${o.y + o.height * 0.04} ${o.x + o.width * 0.63},${o.y + o.height * 0.95} ${o.x + o.width * 0.37},${o.y + o.height * 0.95}" fill="#bfdbfe" stroke="#0f172a" stroke-width="2.5" />`;
-      case "trenchPlan":
+      case "trenchCross": {
+        const slope = Math.max(0.4, Math.min(2, o.meta?.slopeRatio ?? 1));
+        const topInset = Math.max(o.width * 0.02, Math.min(o.width * 0.32, o.width * (0.34 - slope * 0.1)));
+        return `<polygon points="${o.x + topInset},${o.y + o.height * 0.04} ${o.x + o.width - topInset},${o.y + o.height * 0.04} ${o.x + o.width * 0.63},${o.y + o.height * 0.95} ${o.x + o.width * 0.37},${o.y + o.height * 0.95}" fill="#bfdbfe" stroke="#0f172a" stroke-width="2.5" />`;
+      }
+      case "trenchPlan": {
+        const lengthMeters = Math.max(1, Math.round(o.meta?.lengthMeters ?? o.width / GRID_UNIT));
+        const markerLines = Array.from({ length: Math.floor(lengthMeters / 5) }, (_, i) => (i + 1) * 5)
+          .map((meter) => {
+            const px = o.x + (meter / lengthMeters) * o.width;
+            return `<line x1="${px}" y1="${o.y + o.height * 0.1}" x2="${px}" y2="${o.y + o.height * 0.9}" stroke="#1e3a8a" stroke-width="1.2" stroke-dasharray="3 3" />
+                    <text x="${px}" y="${o.y + o.height * 0.18}" fill="#1e3a8a" font-size="10" text-anchor="middle">${meter}m</text>`;
+          })
+          .join("");
         return `<rect x="${o.x}" y="${o.y}" width="${o.width}" height="${o.height}" rx="12" fill="#bfdbfe" stroke="#0f172a" stroke-width="2.5" />
                 <line x1="${o.x + 8}" y1="${o.y + o.height / 2}" x2="${o.x + o.width - 8}" y2="${o.y + o.height / 2}" stroke="#60a5fa" stroke-width="2" stroke-dasharray="8 6" />
-                <line x1="${o.x + 8}" y1="${o.y + o.height * 0.26}" x2="${o.x + o.width - 8}" y2="${o.y + o.height * 0.26}" stroke="#ffffff90" stroke-width="2" />`;
+                <line x1="${o.x + 8}" y1="${o.y + o.height * 0.26}" x2="${o.x + o.width - 8}" y2="${o.y + o.height * 0.26}" stroke="#ffffff90" stroke-width="2" />
+                ${markerLines}`;
+      }
       case "excavatorSide":
         return `<rect x="${o.x + o.width * 0.09}" y="${o.y + o.height * 0.18}" width="${o.width * 0.36}" height="${o.height * 0.38}" fill="#f59e0b" stroke="#111827" stroke-width="2" />
                 <rect x="${o.x + o.width * 0.16}" y="${o.y + o.height * 0.57}" width="${o.width * 0.54}" height="${o.height * 0.2}" fill="#475569" stroke="#111827" stroke-width="2" />
@@ -200,8 +218,8 @@ function buildPrintableSvg(state: CanvasState) {
     )
     .join("");
   const gridMarkup = `
-    ${Array.from({ length: 33 }).map((_, i) => `<line x1="${i * 50}" y1="0" x2="${i * 50}" y2="${VIEW_H}" stroke="#e2e8f0" stroke-width="1" />`).join("")}
-    ${Array.from({ length: 19 }).map((_, i) => `<line x1="0" y1="${i * 50}" x2="${VIEW_W}" y2="${i * 50}" stroke="#e2e8f0" stroke-width="1" />`).join("")}
+    ${Array.from({ length: Math.floor(VIEW_W / GRID_UNIT) + 1 }).map((_, i) => `<line x1="${i * GRID_UNIT}" y1="0" x2="${i * GRID_UNIT}" y2="${VIEW_H}" stroke="#e2e8f0" stroke-width="1" />`).join("")}
+    ${Array.from({ length: Math.floor(VIEW_H / GRID_UNIT) + 1 }).map((_, i) => `<line x1="0" y1="${i * GRID_UNIT}" x2="${VIEW_W}" y2="${i * GRID_UNIT}" stroke="#e2e8f0" stroke-width="1" />`).join("")}
   `;
 
   return `
@@ -360,7 +378,7 @@ export function TrenchPlanner() {
               id: uid("m"),
               from: { objectId: from.objectId, type: from.type },
               to: { objectId: to.objectId, type: to.type },
-              label: "Min. 1,0 m"
+              label: `${(dist(from, to) / GRID_UNIT).toFixed(1).replace(".", ",")} m`
             }
           ]
         }));
@@ -500,6 +518,46 @@ export function TrenchPlanner() {
     setPan({ x: 0, y: 0 });
   };
 
+  const activeTrenchCross = current.present.objects.find((o) => o.type === "trenchCross");
+  const activeTrenchPlan = current.present.objects.find((o) => o.type === "trenchPlan");
+  const currentSlopeRatio = activeTrenchCross?.meta?.slopeRatio ?? 1;
+  const currentPlanLengthMeters = activeTrenchPlan?.meta?.lengthMeters ?? Math.round((activeTrenchPlan?.width ?? 750) / GRID_UNIT);
+
+  const updateCrossSlope = (slopeRatio: number) => {
+    setCurrent((prev) => {
+      const trench = prev.objects.find((o) => o.type === "trenchCross");
+      if (!trench) return prev;
+      const ladderAngle = -Math.max(8, Math.min(30, 20 - slopeRatio * 6));
+      return {
+        ...prev,
+        objects: prev.objects.map((o) => {
+          if (o.type === "trenchCross") {
+            return { ...o, meta: { ...o.meta, slopeRatio } };
+          }
+          if (o.type === "ladder") {
+            return { ...o, rotation: ladderAngle };
+          }
+          return o;
+        })
+      };
+    });
+  };
+
+  const updatePlanLength = (lengthMeters: number) => {
+    setCurrent((prev) => ({
+      ...prev,
+      objects: prev.objects.map((o) =>
+        o.type === "trenchPlan"
+          ? {
+              ...o,
+              width: lengthMeters * GRID_UNIT,
+              meta: { ...o.meta, lengthMeters }
+            }
+          : o
+      )
+    }));
+  };
+
   const resetAll = () => {
     if (!window.confirm("Er du sikker på at du vil tilbakestille hele arbeidsflaten?")) return;
     crossHistory.reset({ objects: cloneObjects(defaultCrossSectionObjects), measurements: cloneMeasurements(defaultCrossMeasurements) });
@@ -557,6 +615,39 @@ export function TrenchPlanner() {
           <Button variant="outline" onClick={() => setShowGrid((v) => !v)}>{showGrid ? "Skjul grid" : "Vis grid"}</Button>
           <Button variant="outline" onClick={resetZoom}>Tilbakestill zoom til 1,00x</Button>
           <div className="text-xs text-slate-600">Zoom: {(zoom * 100).toFixed(0)}%</div>
+          <div className="text-xs text-slate-600">Grid: 1 rute = 1 x 1 meter</div>
+        </div>
+
+        <div className="space-y-3 border-t border-slate-200 pt-4">
+          {activeTab === "cross" ? (
+            <>
+              <div className="text-sm font-medium text-slate-800">Grøfteskråning (H:V)</div>
+              <input
+                type="range"
+                min={0.5}
+                max={2}
+                step={0.1}
+                value={currentSlopeRatio}
+                onChange={(e) => updateCrossSlope(Number(e.target.value))}
+                className="w-full"
+              />
+              <div className="text-xs text-slate-600">Skråning: {currentSlopeRatio.toFixed(1).replace(".", ",")}:1</div>
+            </>
+          ) : (
+            <>
+              <div className="text-sm font-medium text-slate-800">Grøftelengde (meter)</div>
+              <input
+                type="range"
+                min={5}
+                max={30}
+                step={1}
+                value={currentPlanLengthMeters}
+                onChange={(e) => updatePlanLength(Number(e.target.value))}
+                className="w-full"
+              />
+              <div className="text-xs text-slate-600">Lengde: {currentPlanLengthMeters} m</div>
+            </>
+          )}
         </div>
       </aside>
 
@@ -595,12 +686,12 @@ export function TrenchPlanner() {
           >
             <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
               {showGrid &&
-                Array.from({ length: 33 }).map((_, i) => (
-                  <line key={`gx-${i}`} x1={i * 50} y1={0} x2={i * 50} y2={VIEW_H} stroke="#e2e8f0" strokeWidth={1} />
+                Array.from({ length: Math.floor(VIEW_W / GRID_UNIT) + 1 }).map((_, i) => (
+                  <line key={`gx-${i}`} x1={i * GRID_UNIT} y1={0} x2={i * GRID_UNIT} y2={VIEW_H} stroke="#e2e8f0" strokeWidth={1} />
                 ))}
               {showGrid &&
-                Array.from({ length: 19 }).map((_, i) => (
-                  <line key={`gy-${i}`} x1={0} y1={i * 50} x2={VIEW_W} y2={i * 50} stroke="#e2e8f0" strokeWidth={1} />
+                Array.from({ length: Math.floor(VIEW_H / GRID_UNIT) + 1 }).map((_, i) => (
+                  <line key={`gy-${i}`} x1={0} y1={i * GRID_UNIT} x2={VIEW_W} y2={i * GRID_UNIT} stroke="#e2e8f0" strokeWidth={1} />
                 ))}
 
               {current.present.objects.map((o) => (

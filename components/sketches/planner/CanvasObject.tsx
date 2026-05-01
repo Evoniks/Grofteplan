@@ -10,6 +10,10 @@ export type CanvasObjectData = {
   width: number;
   height: number;
   rotation: number;
+  meta?: {
+    slopeRatio?: number;
+    lengthMeters?: number;
+  };
 };
 
 type Props = {
@@ -26,7 +30,8 @@ export function CanvasObject({ object, selected, onMouseDown }: Props) {
         y: object.y,
         width: object.width,
         height: object.height,
-        rotation: object.rotation
+        rotation: object.rotation,
+        meta: object.meta
       })}
       {selected && (
         <>
