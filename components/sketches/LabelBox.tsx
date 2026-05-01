@@ -9,7 +9,6 @@ export function LabelBox({ x, y, text, tone = "default" }: Props) {
   return (
     <foreignObject x={x - 10} y={y - 2.8} width={22} height={5.6}>
       <div
-        xmlns="http://www.w3.org/1999/xhtml"
         style={{
           fontSize: "10px",
           lineHeight: 1.1,

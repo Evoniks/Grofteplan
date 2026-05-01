@@ -16,6 +16,9 @@ export default function HomePage() {
           <Link href="/plan" className="inline-block">
             <Button size="lg">Lag grøfteplan</Button>
           </Link>
+          <Link href="/skisseverktoy" className="inline-block">
+            <Button size="lg" variant="secondary">Åpne skisseverktøy</Button>
+          </Link>
           <Link href="/regelverk" className="inline-block">
             <Button size="lg" variant="outline" className="border-blue-200 bg-transparent text-white hover:bg-white/10">
               Krav, lover og forskrifter
