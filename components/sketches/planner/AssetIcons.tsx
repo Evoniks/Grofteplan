@@ -202,11 +202,9 @@ export function SheetPileIcon(props: IconProps) {
   const { x, y, width, height } = props;
   return (
     <IconFrame {...props}>
-      <rect x={x + width * 0.18} y={y + height * 0.06} width={width * 0.14} height={height * 0.88} fill="#334155" stroke="#0f172a" strokeWidth={2} />
-      <rect x={x + width * 0.68} y={y + height * 0.06} width={width * 0.14} height={height * 0.88} fill="#334155" stroke="#0f172a" strokeWidth={2} />
-      <line x1={x + width * 0.32} y1={y + height * 0.2} x2={x + width * 0.68} y2={y + height * 0.2} stroke="#64748b" strokeWidth={4} />
-      <line x1={x + width * 0.32} y1={y + height * 0.48} x2={x + width * 0.68} y2={y + height * 0.48} stroke="#64748b" strokeWidth={4} />
-      <line x1={x + width * 0.32} y1={y + height * 0.76} x2={x + width * 0.68} y2={y + height * 0.76} stroke="#64748b" strokeWidth={4} />
+      {/* Spunt: to tynne, vertikale elementer uten tverrliggere */}
+      <rect x={x + width * 0.16} y={y + height * 0.06} width={width * 0.08} height={height * 0.88} fill="#334155" stroke="#0f172a" strokeWidth={2} />
+      <rect x={x + width * 0.76} y={y + height * 0.06} width={width * 0.08} height={height * 0.88} fill="#334155" stroke="#0f172a" strokeWidth={2} />
     </IconFrame>
   );
 }
@@ -215,9 +213,11 @@ export function TrenchBoxIcon(props: IconProps) {
   const { x, y, width, height } = props;
   return (
     <IconFrame {...props}>
-      <rect x={x + width * 0.12} y={y + height * 0.12} width={width * 0.76} height={height * 0.76} fill="none" stroke="#7c3aed" strokeWidth={6} />
-      <line x1={x + width * 0.12} y1={y + height * 0.34} x2={x + width * 0.88} y2={y + height * 0.34} stroke="#a78bfa" strokeWidth={4} />
-      <line x1={x + width * 0.12} y1={y + height * 0.66} x2={x + width * 0.88} y2={y + height * 0.66} stroke="#a78bfa" strokeWidth={4} />
+      {/* Grøftekasse: samme prinsipp, men kraftigere enn spunt */}
+      <rect x={x + width * 0.14} y={y + height * 0.08} width={width * 0.12} height={height * 0.84} fill="#7c3aed" stroke="#4c1d95" strokeWidth={2} />
+      <rect x={x + width * 0.74} y={y + height * 0.08} width={width * 0.12} height={height * 0.84} fill="#7c3aed" stroke="#4c1d95" strokeWidth={2} />
+      <line x1={x + width * 0.26} y1={y + height * 0.22} x2={x + width * 0.74} y2={y + height * 0.22} stroke="#a78bfa" strokeWidth={4} />
+      <line x1={x + width * 0.26} y1={y + height * 0.78} x2={x + width * 0.74} y2={y + height * 0.78} stroke="#a78bfa" strokeWidth={4} />
     </IconFrame>
   );
 }

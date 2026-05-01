@@ -10,65 +10,54 @@ import { useCanvasHistory } from "@/components/sketches/planner/useCanvasHistory
 
 type TabKey = "cross" | "plan";
 type Selection = { kind: "object" | "measurement"; id: string } | null;
-type SlopeUnit = "hv" | "desimal" | "brok" | "helning" | "prosent";
 type SnapPointType = "trenchEdgeLeft" | "trenchEdgeRight" | "nearestTrackEdge" | "nearestBaseEdge" | "nearestWheelEdge";
 type SnapPoint = { objectId: string; type: SnapPointType; x: number; y: number };
 type SnapRef = { objectId: string; type: SnapPointType };
 type MeasurementData = { id: string; from: SnapRef; to: SnapRef; label: string };
 type CanvasState = { objects: CanvasObjectData[]; measurements: MeasurementData[] };
+type WorkPlanData = {
+  lengthProfile: string;
+  soilAndInstallations: string;
+  typicalCrossSection: string;
+  spoilPlacement: string;
+  workInstruction: string;
+};
 
 const VIEW_W = 1600;
 const VIEW_H = 900;
 const GRID_UNIT = 50; // 1 rute = 1 meter
+const MIN_SLOPE_PERCENT = 45;
+const MAX_SLOPE_PERCENT = 90;
+const MIN_SLOPE_RATIO = 100 / MAX_SLOPE_PERCENT; // 1.11:1
+const MAX_SLOPE_RATIO = 100 / MIN_SLOPE_PERCENT; // 2.22:1
 
 function clampSlopeRatio(value: number) {
-  return Math.max(0.5, Math.min(2, value));
+  return Math.max(MIN_SLOPE_RATIO, Math.min(MAX_SLOPE_RATIO, value));
 }
 
-function slopeRatioToValue(ratio: number, unit: SlopeUnit) {
-  const safe = clampSlopeRatio(ratio);
-  switch (unit) {
-    case "hv":
-    case "desimal":
-      return safe.toFixed(2).replace(".", ",");
-    case "brok":
-      return `${safe.toFixed(2).replace(".", ",")}:1`;
-    case "helning": {
-      const deg = (Math.atan(1 / safe) * 180) / Math.PI;
-      return deg.toFixed(1).replace(".", ",");
-    }
-    case "prosent": {
-      const pct = (1 / safe) * 100;
-      return pct.toFixed(0);
-    }
-    default:
-      return safe.toFixed(2).replace(".", ",");
-  }
+function escapeHtml(text: string) {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
-function parseSlopeInput(input: string, unit: SlopeUnit) {
+function parseNumericInput(input: string) {
   const cleaned = input.trim().replace(",", ".");
   if (!cleaned) return null;
-  if (unit === "brok") {
-    const m = cleaned.match(/^([0-9]*\.?[0-9]+)\s*:\s*([0-9]*\.?[0-9]+)$/);
+  if (cleaned.includes("/")) {
+    const m = cleaned.match(/^([0-9]*\.?[0-9]+)\s*\/\s*([0-9]*\.?[0-9]+)$/);
     if (!m) return null;
-    const h = Number(m[1]);
-    const v = Number(m[2]);
-    if (!Number.isFinite(h) || !Number.isFinite(v) || h <= 0 || v <= 0) return null;
-    return clampSlopeRatio(h / v);
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b === 0) return null;
+    return a / b;
   }
   const n = Number(cleaned);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  if (unit === "helning") {
-    const rad = (n * Math.PI) / 180;
-    const tan = Math.tan(rad);
-    if (tan <= 0) return null;
-    return clampSlopeRatio(1 / tan);
-  }
-  if (unit === "prosent") {
-    return clampSlopeRatio(100 / n);
-  }
-  return clampSlopeRatio(n);
+  if (!Number.isFinite(n)) return null;
+  return n;
 }
 
 const presets: Record<ObjectType, Omit<CanvasObjectData, "id" | "x" | "y" | "rotation">> = {
@@ -302,8 +291,14 @@ export function TrenchPlanner() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
   const [panning, setPanning] = useState<{ x: number; y: number } | null>(null);
-  const [slopeUnit, setSlopeUnit] = useState<SlopeUnit>("hv");
-  const [slopeInput, setSlopeInput] = useState("1,00");
+  const [slopeInput, setSlopeInput] = useState("45,0");
+  const [workPlan, setWorkPlan] = useState<WorkPlanData>({
+    lengthProfile: "",
+    soilAndInstallations: "",
+    typicalCrossSection: "Tverrprofil med valgt skråning og sikring er vist i skissen.",
+    spoilPlacement: "Gravemasser plasseres minimum 1,0 m fra grøftekant.",
+    workInstruction: ""
+  });
 
   const crossHistory = useCanvasHistory<CanvasState>({
     objects: defaultCrossSectionObjects,
@@ -367,10 +362,27 @@ export function TrenchPlanner() {
 
   const addObject = (type: ObjectType) => {
     const preset = presets[type];
-    setCurrent((prev) => ({
-      ...prev,
-      objects: [...prev.objects, { id: uid(type), ...preset, x: 140 + prev.objects.length * 16, y: 120 + prev.objects.length * 10, rotation: 0 }]
-    }));
+    setCurrent((prev) => {
+      const trench = prev.objects.find((o) => o.type === "trenchCross");
+      const isCrossSafety = type === "sheetPile" || type === "trenchBox";
+      const fittedWidth = trench ? Math.max(120, trench.width - 24) : preset.width;
+      const fittedX = trench ? trench.x + (trench.width - fittedWidth) / 2 : 140 + prev.objects.length * 16;
+      const fittedY = trench ? trench.y + 4 : 120 + prev.objects.length * 10;
+      return {
+        ...prev,
+        objects: [
+          ...prev.objects,
+          {
+            id: uid(type),
+            ...preset,
+            width: isCrossSafety ? fittedWidth : preset.width,
+            x: isCrossSafety ? fittedX : 140 + prev.objects.length * 16,
+            y: isCrossSafety ? fittedY : 120 + prev.objects.length * 10,
+            rotation: 0
+          }
+        ]
+      };
+    });
   };
 
   const nearestSnap = (p: { x: number; y: number }) => {
@@ -591,10 +603,17 @@ export function TrenchPlanner() {
   const activeTrenchPlan = current.present.objects.find((o) => o.type === "trenchPlan");
   const currentSlopeRatio = activeTrenchCross?.meta?.slopeRatio ?? 1;
   const currentPlanLengthMeters = activeTrenchPlan?.meta?.lengthMeters ?? Math.round((activeTrenchPlan?.width ?? 750) / GRID_UNIT);
+  const currentPlanWidthMeters = (activeTrenchPlan?.height ?? 130) / GRID_UNIT;
   const activeLadder = current.present.objects.find((o) => o.type === "ladder");
   const currentLadderAngle = activeLadder?.rotation ?? -14;
   const trenchDepthMeters = activeTrenchCross ? activeTrenchCross.height / GRID_UNIT : 0;
   const showSafetyMeasures = activeTab === "cross" && trenchDepthMeters > 2;
+  const selectedPlanTrench = selectedObject?.type === "trenchPlan" ? current.present.objects.find((o) => o.id === selectedObject.id) : null;
+  const selectedSpoilLong = selectedObject?.type === "spoilPileLong" ? current.present.objects.find((o) => o.id === selectedObject.id) : null;
+  const currentSlopeDegrees = (Math.atan(1 / currentSlopeRatio) * 180) / Math.PI;
+  const currentSlopePercent = 100 / currentSlopeRatio;
+  const minSlopeDegrees = (Math.atan(MIN_SLOPE_PERCENT / 100) * 180) / Math.PI;
+  const maxSlopeDegrees = (Math.atan(MAX_SLOPE_PERCENT / 100) * 180) / Math.PI;
 
   const updateCrossSlope = (slopeRatio: number) => {
     setCurrent((prev) => {
@@ -619,15 +638,69 @@ export function TrenchPlanner() {
     }));
   };
 
+  const updateSafetyWidth = (width: number) => {
+    if (!selectedObject || (selectedObject.type !== "sheetPile" && selectedObject.type !== "trenchBox")) return;
+    const nextWidth = Math.max(100, Math.min(900, width));
+    setCurrent((prev) => ({
+      ...prev,
+      objects: prev.objects.map((o) => {
+        if (o.id !== selectedObject.id) return o;
+        const center = o.x + o.width / 2;
+        return { ...o, width: nextWidth, x: center - nextWidth / 2 };
+      })
+    }));
+  };
+
   const updatePlanLength = (lengthMeters: number) => {
+    const targetId = selectedObject?.type === "trenchPlan" ? selectedObject.id : null;
+    setCurrent((prev) => {
+      const firstTrench = prev.objects.find((o) => o.type === "trenchPlan");
+      const activeId = targetId ?? firstTrench?.id;
+      if (!activeId) return prev;
+      return {
+        ...prev,
+        objects: prev.objects.map((o) =>
+          o.id === activeId
+            ? {
+                ...o,
+                width: lengthMeters * GRID_UNIT,
+                meta: { ...o.meta, lengthMeters }
+              }
+            : o
+        )
+      };
+    });
+  };
+
+  const updatePlanWidth = (widthMeters: number) => {
+    const targetId = selectedObject?.type === "trenchPlan" ? selectedObject.id : null;
+    setCurrent((prev) => {
+      const firstTrench = prev.objects.find((o) => o.type === "trenchPlan");
+      const activeId = targetId ?? firstTrench?.id;
+      if (!activeId) return prev;
+      return {
+        ...prev,
+        objects: prev.objects.map((o) =>
+          o.id === activeId
+            ? {
+                ...o,
+                height: Math.max(60, widthMeters * GRID_UNIT)
+              }
+            : o
+        )
+      };
+    });
+  };
+
+  const updateSelectedSpoilLength = (lengthMeters: number) => {
+    if (!selectedObject || selectedObject.type !== "spoilPileLong") return;
     setCurrent((prev) => ({
       ...prev,
       objects: prev.objects.map((o) =>
-        o.type === "trenchPlan"
+        o.id === selectedObject.id
           ? {
               ...o,
-              width: lengthMeters * GRID_UNIT,
-              meta: { ...o.meta, lengthMeters }
+              width: Math.max(100, lengthMeters * GRID_UNIT)
             }
           : o
       )
@@ -636,8 +709,14 @@ export function TrenchPlanner() {
 
   useEffect(() => {
     if (activeTab !== "cross") return;
-    setSlopeInput(slopeRatioToValue(currentSlopeRatio, slopeUnit));
-  }, [activeTab, currentSlopeRatio, slopeUnit]);
+    setSlopeInput(currentSlopeDegrees.toFixed(1).replace(".", ","));
+  }, [activeTab, currentSlopeDegrees]);
+
+  const onSlopeSliderChange = (rawValue: number) => {
+    const radians = (rawValue * Math.PI) / 180;
+    const ratio = 1 / Math.tan(radians);
+    updateCrossSlope(ratio);
+  };
 
   const resetAll = () => {
     if (!window.confirm("Er du sikker på at du vil tilbakestille hele arbeidsflaten?")) return;
@@ -651,6 +730,8 @@ export function TrenchPlanner() {
 
   const exportPrint = () => {
     const render = (title: string) => `<h2 style="font-family:Arial,sans-serif;margin:16px 0 8px;">${title}</h2>`;
+    const renderPlanField = (title: string, value: string) =>
+      `<p style="margin:6px 0;"><strong>${title}:</strong> ${value.trim() ? escapeHtml(value) : "<em>Ikke utfylt</em>"}</p>`;
     const w = window.open("", "_blank", "noopener,noreferrer,width=1400,height=1000");
     if (!w) return;
     w.document.write(`
@@ -660,6 +741,12 @@ export function TrenchPlanner() {
         ${buildPrintableSvg(crossHistory.present)}
         ${render("Plan (ovenfra)")}
         ${buildPrintableSvg(planHistory.present)}
+        ${render("Plan for arbeidet (§ 21-5)")}
+        ${renderPlanField("a) Lengdeprofil", workPlan.lengthProfile)}
+        ${renderPlanField("a) Jordarter/installasjoner", workPlan.soilAndInstallations)}
+        ${renderPlanField("b) Typiske tverrprofiler / avstivning", workPlan.typicalCrossSection)}
+        ${renderPlanField("c) Plassering av gravemasser", workPlan.spoilPlacement)}
+        ${renderPlanField("d) Arbeidsinstruks", workPlan.workInstruction)}
       </body></html>
     `);
     w.document.close();
@@ -703,40 +790,41 @@ export function TrenchPlanner() {
         <div className="space-y-3 border-t border-slate-200 pt-4">
           {activeTab === "cross" ? (
             <>
-              <div className="text-sm font-medium text-slate-800">Grøfteskråning (H:V)</div>
+              <div className="text-sm font-medium text-slate-800">Grøfteskråning (grader)</div>
               <div className="grid grid-cols-[1fr_auto] gap-2">
-                <select
-                  className="h-9 rounded-md border border-slate-300 px-2 text-sm"
-                  value={slopeUnit}
-                  onChange={(e) => setSlopeUnit(e.target.value as SlopeUnit)}
-                >
-                  <option value="hv">H:V-forhold</option>
-                  <option value="desimal">Desimal</option>
-                  <option value="brok">Brøk</option>
-                  <option value="helning">Helning (grader)</option>
-                  <option value="prosent">Prosent (%)</option>
-                </select>
+                <div className="flex items-center rounded-md border border-slate-300 px-2 text-sm text-slate-700">
+                  Helning
+                </div>
                 <input
                   className="h-9 w-28 rounded-md border border-slate-300 px-2 text-sm"
+                  inputMode="decimal"
+                  placeholder="f.eks. 34,0 eller 1/2"
                   value={slopeInput}
                   onChange={(e) => {
                     const value = e.target.value;
                     setSlopeInput(value);
-                    const parsed = parseSlopeInput(value, slopeUnit);
-                    if (parsed !== null) updateCrossSlope(parsed);
+                    const parsed = parseNumericInput(value);
+                    if (parsed === null) return;
+                    const radians = (parsed * Math.PI) / 180;
+                    const tan = Math.tan(radians);
+                    if (tan <= 0) return;
+                    updateCrossSlope(1 / tan);
                   }}
                 />
               </div>
               <input
                 type="range"
-                min={0.5}
-                max={2}
+                min={minSlopeDegrees}
+                max={maxSlopeDegrees}
                 step={0.1}
-                value={currentSlopeRatio}
-                onChange={(e) => updateCrossSlope(Number(e.target.value))}
+                value={currentSlopeDegrees}
+                onChange={(e) => onSlopeSliderChange(Number(e.target.value))}
                 className="w-full"
               />
-              <div className="text-xs text-slate-600">Skråning: {currentSlopeRatio.toFixed(1).replace(".", ",")}:1</div>
+              <div className="text-xs text-slate-600">
+                Skråning: {currentSlopeDegrees.toFixed(1).replace(".", ",")}° ({currentSlopePercent.toFixed(0)}%)
+              </div>
+              <div className="text-xs text-slate-600">Tillatt område: 45% til 90% helning</div>
 
               <div className="pt-2 text-sm font-medium text-slate-800">Stigevinkel</div>
               <input
@@ -754,6 +842,23 @@ export function TrenchPlanner() {
                   Grøftedybde over 2,0 m: vurder spunt eller grøftekasse.
                 </div>
               )}
+              {selectedObject && (selectedObject.type === "sheetPile" || selectedObject.type === "trenchBox") && (
+                <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+                  <div className="text-xs font-medium text-slate-700">
+                    Bredde {selectedObject.type === "sheetPile" ? "spunt" : "grøftekasse"}
+                  </div>
+                  <input
+                    type="range"
+                    min={100}
+                    max={900}
+                    step={5}
+                    value={selectedObject.width}
+                    onChange={(e) => updateSafetyWidth(Number(e.target.value))}
+                    className="w-full"
+                  />
+                  <div className="text-xs text-slate-600">{(selectedObject.width / GRID_UNIT).toFixed(1).replace(".", ",")} m</div>
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -763,13 +868,78 @@ export function TrenchPlanner() {
                 min={5}
                 max={30}
                 step={1}
-                value={currentPlanLengthMeters}
+                value={selectedPlanTrench ? selectedPlanTrench.width / GRID_UNIT : currentPlanLengthMeters}
                 onChange={(e) => updatePlanLength(Number(e.target.value))}
                 className="w-full"
               />
-              <div className="text-xs text-slate-600">Lengde: {currentPlanLengthMeters} m</div>
+              <div className="text-xs text-slate-600">
+                Lengde: {(selectedPlanTrench ? selectedPlanTrench.width / GRID_UNIT : currentPlanLengthMeters).toFixed(1).replace(".", ",")} m
+              </div>
+              <div className="pt-2 text-sm font-medium text-slate-800">Grøftebredde (meter)</div>
+              <input
+                type="range"
+                min={1}
+                max={6}
+                step={0.1}
+                value={selectedPlanTrench ? selectedPlanTrench.height / GRID_UNIT : currentPlanWidthMeters}
+                onChange={(e) => updatePlanWidth(Number(e.target.value))}
+                className="w-full"
+              />
+              <div className="text-xs text-slate-600">
+                Bredde: {(selectedPlanTrench ? selectedPlanTrench.height / GRID_UNIT : currentPlanWidthMeters).toFixed(1).replace(".", ",")} m
+              </div>
+              {selectedSpoilLong && (
+                <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+                  <div className="text-xs font-medium text-slate-700">Valgt massehaug (lengde)</div>
+                  <input
+                    type="range"
+                    min={2}
+                    max={20}
+                    step={0.5}
+                    value={selectedSpoilLong.width / GRID_UNIT}
+                    onChange={(e) => updateSelectedSpoilLength(Number(e.target.value))}
+                    className="w-full"
+                  />
+                  <div className="text-xs text-slate-600">{(selectedSpoilLong.width / GRID_UNIT).toFixed(1).replace(".", ",")} m</div>
+                </div>
+              )}
+              <div className="text-xs text-slate-500">Tips: velg et grøfte- eller masse-symbol for å justere det spesifikke objektet når du har flere.</div>
             </>
           )}
+        </div>
+
+        <div className="space-y-2 border-t border-slate-200 pt-4">
+          <h3 className="text-sm font-semibold text-slate-900">Plan for arbeidet (§ 21-5)</h3>
+          <textarea
+            className="min-h-[60px] w-full rounded-md border border-slate-300 p-2 text-xs"
+            placeholder="a) Lengdeprofil med nivå og beskrivelse."
+            value={workPlan.lengthProfile}
+            onChange={(e) => setWorkPlan((prev) => ({ ...prev, lengthProfile: e.target.value }))}
+          />
+          <textarea
+            className="min-h-[60px] w-full rounded-md border border-slate-300 p-2 text-xs"
+            placeholder="a) Jordarter ned til 1 m under utgravingsnivå + installasjoner i grunnen."
+            value={workPlan.soilAndInstallations}
+            onChange={(e) => setWorkPlan((prev) => ({ ...prev, soilAndInstallations: e.target.value }))}
+          />
+          <textarea
+            className="min-h-[52px] w-full rounded-md border border-slate-300 p-2 text-xs"
+            placeholder="b) Typiske tverrprofiler og planlagt avstivning."
+            value={workPlan.typicalCrossSection}
+            onChange={(e) => setWorkPlan((prev) => ({ ...prev, typicalCrossSection: e.target.value }))}
+          />
+          <textarea
+            className="min-h-[52px] w-full rounded-md border border-slate-300 p-2 text-xs"
+            placeholder="c) Plassering av gravemasser."
+            value={workPlan.spoilPlacement}
+            onChange={(e) => setWorkPlan((prev) => ({ ...prev, spoilPlacement: e.target.value }))}
+          />
+          <textarea
+            className="min-h-[70px] w-full rounded-md border border-slate-300 p-2 text-xs"
+            placeholder="d) Arbeidsinstruks for sikker gjennomføring."
+            value={workPlan.workInstruction}
+            onChange={(e) => setWorkPlan((prev) => ({ ...prev, workInstruction: e.target.value }))}
+          />
         </div>
       </aside>
 
