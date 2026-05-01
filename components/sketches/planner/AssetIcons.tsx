@@ -12,6 +12,8 @@ export type ObjectType =
   | "spoilPileLong"
   | "ladder"
   | "barrier"
+  | "sheetPile"
+  | "trenchBox"
   | "pipe"
   | "escapeRoute";
 
@@ -25,14 +27,17 @@ type IconProps = {
   meta?: {
     slopeRatio?: number;
     lengthMeters?: number;
+    mirrored?: boolean;
   };
 };
 
-function IconFrame({ children, x, y, width, height, rotation = 0, withShadow = true }: IconProps & { children: ReactNode; withShadow?: boolean }) {
+function IconFrame({ children, x, y, width, height, rotation = 0, withShadow = true, meta }: IconProps & { children: ReactNode; withShadow?: boolean }) {
   const cx = x + width / 2;
   const cy = y + height / 2;
+  const mirrored = Boolean(meta?.mirrored);
+  const mirrorTransform = mirrored ? `translate(${2 * cx} 0) scale(-1 1)` : "";
   return (
-    <g transform={`rotate(${rotation} ${cx} ${cy})`}>
+    <g transform={`${mirrorTransform} rotate(${rotation} ${cx} ${cy})`.trim()}>
       {withShadow && <ellipse cx={cx} cy={y + height + 6} rx={width * 0.38} ry={Math.max(4, height * 0.06)} fill="#0f172a1f" />}
       {children}
     </g>
@@ -103,8 +108,11 @@ export function ExcavatorSideIcon(props: IconProps) {
       ))}
       <rect x={x + width * 0.14} y={y + height * 0.19} width={width * 0.4} height={height * 0.34} rx={6} fill="#f59e0b" stroke="#111827" strokeWidth={2} />
       <rect x={x + width * 0.31} y={y + height * 0.25} width={width * 0.16} height={height * 0.21} fill="#93c5fd" stroke="#1f2937" strokeWidth={1.5} />
+      <rect x={x + width * 0.25} y={y + height * 0.13} width={width * 0.12} height={height * 0.06} rx={4} fill="#f59e0b" stroke="#111827" strokeWidth={2} />
       <line x1={x + width * 0.54} y1={y + height * 0.27} x2={x + width * 0.84} y2={y + height * 0.1} stroke="#374151" strokeWidth={6} />
       <line x1={x + width * 0.84} y1={y + height * 0.1} x2={x + width * 0.96} y2={y + height * 0.2} stroke="#374151" strokeWidth={5} />
+      <path d={`M ${x + width * 0.97} ${y + height * 0.2} Q ${x + width * 0.995} ${y + height * 0.26} ${x + width * 0.95} ${y + height * 0.29}`} fill="none" stroke="#374151" strokeWidth={4} />
+      <path d={`M ${x + width * 0.95} ${y + height * 0.29} L ${x + width * 0.985} ${y + height * 0.33} L ${x + width * 0.93} ${y + height * 0.36} Z`} fill="#334155" stroke="#0f172a" strokeWidth={1.5} />
       <line x1={x + width * 0.13} y1={y + height * 0.26} x2={x + width * 0.41} y2={y + height * 0.26} stroke="#ffffff95" strokeWidth={2} />
     </IconFrame>
   );
@@ -190,6 +198,30 @@ export function BarrierIcon(props: IconProps) {
   );
 }
 
+export function SheetPileIcon(props: IconProps) {
+  const { x, y, width, height } = props;
+  return (
+    <IconFrame {...props}>
+      <rect x={x + width * 0.18} y={y + height * 0.06} width={width * 0.14} height={height * 0.88} fill="#334155" stroke="#0f172a" strokeWidth={2} />
+      <rect x={x + width * 0.68} y={y + height * 0.06} width={width * 0.14} height={height * 0.88} fill="#334155" stroke="#0f172a" strokeWidth={2} />
+      <line x1={x + width * 0.32} y1={y + height * 0.2} x2={x + width * 0.68} y2={y + height * 0.2} stroke="#64748b" strokeWidth={4} />
+      <line x1={x + width * 0.32} y1={y + height * 0.48} x2={x + width * 0.68} y2={y + height * 0.48} stroke="#64748b" strokeWidth={4} />
+      <line x1={x + width * 0.32} y1={y + height * 0.76} x2={x + width * 0.68} y2={y + height * 0.76} stroke="#64748b" strokeWidth={4} />
+    </IconFrame>
+  );
+}
+
+export function TrenchBoxIcon(props: IconProps) {
+  const { x, y, width, height } = props;
+  return (
+    <IconFrame {...props}>
+      <rect x={x + width * 0.12} y={y + height * 0.12} width={width * 0.76} height={height * 0.76} fill="none" stroke="#7c3aed" strokeWidth={6} />
+      <line x1={x + width * 0.12} y1={y + height * 0.34} x2={x + width * 0.88} y2={y + height * 0.34} stroke="#a78bfa" strokeWidth={4} />
+      <line x1={x + width * 0.12} y1={y + height * 0.66} x2={x + width * 0.88} y2={y + height * 0.66} stroke="#a78bfa" strokeWidth={4} />
+    </IconFrame>
+  );
+}
+
 export function PipeIcon(props: IconProps) {
   const { x, y, width, height } = props;
   return (
@@ -242,6 +274,10 @@ export function renderAssetIcon(type: ObjectType, props: IconProps) {
       return <LadderIcon {...props} />;
     case "barrier":
       return <BarrierIcon {...props} />;
+    case "sheetPile":
+      return <SheetPileIcon {...props} />;
+    case "trenchBox":
+      return <TrenchBoxIcon {...props} />;
     case "pipe":
       return <PipeIcon {...props} />;
     case "escapeRoute":

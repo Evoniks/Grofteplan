@@ -10,6 +10,7 @@ type Props = {
   onRotate: () => void;
   onSendBackward: () => void;
   onBringForward: () => void;
+  rotateLabel?: string;
 };
 
 export function ObjectToolbar({
@@ -19,7 +20,8 @@ export function ObjectToolbar({
   onDuplicate,
   onRotate,
   onSendBackward,
-  onBringForward
+  onBringForward,
+  rotateLabel = "Roter 90°"
 }: Props) {
   return (
     <div
@@ -28,7 +30,7 @@ export function ObjectToolbar({
     >
       <Button size="sm" variant="outline" onClick={onDelete}>Slett</Button>
       <Button size="sm" variant="outline" onClick={onDuplicate}>Dupliser</Button>
-      <Button size="sm" variant="outline" onClick={onRotate}>Roter 90°</Button>
+      <Button size="sm" variant="outline" onClick={onRotate}>{rotateLabel}</Button>
       <Button size="sm" variant="outline" onClick={onSendBackward}>Bakover</Button>
       <Button size="sm" variant="outline" onClick={onBringForward}>Fremover</Button>
     </div>
