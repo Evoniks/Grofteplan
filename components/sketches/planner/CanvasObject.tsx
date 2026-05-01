@@ -13,6 +13,7 @@ export type CanvasObjectData = {
   meta?: {
     slopeRatio?: number;
     lengthMeters?: number;
+    mirrored?: boolean;
   };
 };
 
