@@ -9,8 +9,6 @@ type Props = {
   onDelete: () => void;
   onDuplicate: () => void;
   onRotate: () => void;
-  onSendBackward: () => void;
-  onBringForward: () => void;
   rotateLabel?: string;
   /** Ekstra innhald vist under knapperekka når «Innstillingar» er open */
   menu?: ReactNode;
@@ -23,8 +21,6 @@ export function ObjectToolbar({
   onDelete,
   onDuplicate,
   onRotate,
-  onSendBackward,
-  onBringForward,
   rotateLabel = "Roter 90°",
   menu,
   menuTitle = "Innstillingar"
@@ -45,12 +41,6 @@ export function ObjectToolbar({
         </Button>
         <Button size="sm" variant="outline" onClick={onRotate}>
           {rotateLabel}
-        </Button>
-        <Button size="sm" variant="outline" onClick={onSendBackward}>
-          Bakover
-        </Button>
-        <Button size="sm" variant="outline" onClick={onBringForward}>
-          Fremover
         </Button>
         {menu && (
           <Button size="sm" variant={open ? "default" : "secondary"} type="button" onClick={() => setOpen((v) => !v)}>

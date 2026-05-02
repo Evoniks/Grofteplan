@@ -3,7 +3,16 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { CanvasObject, type CanvasObjectData } from "@/components/sketches/planner/CanvasObject";
-import { EXCAVATOR_SIDE_PNG, type ObjectType } from "@/components/sketches/planner/AssetIcons";
+import {
+  EXCAVATOR_SIDE_ASPECT,
+  EXCAVATOR_SIDE_LIGHT_BG_KNOCKOUT,
+  EXCAVATOR_SIDE_PNG,
+  EXCAVATOR_SIDE_PRESET_HEIGHT,
+  EXCAVATOR_SIDE_PRESET_WIDTH,
+  EXCAVATOR_TOP_PNG,
+  TRUCK_TOP_PNG,
+  type ObjectType
+} from "@/components/sketches/planner/AssetIcons";
 import { MeasurementLine, type MeasurementView } from "@/components/sketches/planner/MeasurementLine";
 import { ObjectToolbar } from "@/components/sketches/planner/ObjectToolbar";
 import { useCanvasHistory } from "@/components/sketches/planner/useCanvasHistory";
@@ -16,6 +25,13 @@ import {
 } from "@/components/sketches/planner/trenchCrossGeometry";
 
 type TabKey = "cross" | "plan";
+
+const EXCAVATOR_TOP_PRESET_WIDTH = 160;
+const EXCAVATOR_TOP_PRESET_HEIGHT = 340;
+const EXCAVATOR_TOP_ASPECT = EXCAVATOR_TOP_PRESET_HEIGHT / EXCAVATOR_TOP_PRESET_WIDTH;
+const TRUCK_TOP_PRESET_WIDTH = 520;
+const TRUCK_TOP_PRESET_HEIGHT = 130;
+const TRUCK_TOP_ASPECT = TRUCK_TOP_PRESET_HEIGHT / TRUCK_TOP_PRESET_WIDTH;
 /** Justering av grøftevegg: V = venstre, H = høyre, begge = V + H */
 type TrenchWallEditScope = "begge" | "venstre" | "hoyre";
 type Selection = { kind: "object" | "measurement"; id: string } | null;
@@ -70,9 +86,9 @@ const presets: Record<ObjectType, Omit<CanvasObjectData, "id" | "x" | "y" | "rot
     meta: { slopeAngleLeftDeg: 45, slopeAngleRightDeg: 45 }
   }, // ca 10 m toppbredde, 4 m dybde
   trenchPlan: { type: "trenchPlan", width: 750, height: 130 }, // 15 m lengde, 2.6 m korridor
-  excavatorSide: { type: "excavatorSide", width: 575, height: 250 }, // 11,5 × 5 m (1 rute = 1 m)
-  excavatorTop: { type: "excavatorTop", width: 160, height: 340 }, // ca 3.2 x 6.8 m
-  truckTop: { type: "truckTop", width: 520, height: 130 }, // ca 10.4 x 2.6 m
+  excavatorSide: { type: "excavatorSide", width: EXCAVATOR_SIDE_PRESET_WIDTH, height: EXCAVATOR_SIDE_PRESET_HEIGHT },
+  excavatorTop: { type: "excavatorTop", width: EXCAVATOR_TOP_PRESET_WIDTH, height: EXCAVATOR_TOP_PRESET_HEIGHT },
+  truckTop: { type: "truckTop", width: TRUCK_TOP_PRESET_WIDTH, height: TRUCK_TOP_PRESET_HEIGHT },
   spoilPile: { type: "spoilPile", width: 260, height: 120 },
   spoilPileLong: { type: "spoilPileLong", width: 360, height: 90 },
   ladder: { type: "ladder", width: 60, height: 220 },
@@ -215,7 +231,11 @@ function resolveMeasurements(state: CanvasState): MeasurementView[] {
 
 function buildPrintableSvg(state: CanvasState, assetOrigin = "") {
   const measurements = resolveMeasurements(state);
-  const excavatorImgSrc = `${assetOrigin}${EXCAVATOR_SIDE_PNG}`;
+  const excavatorSideImgSrc = `${assetOrigin}${EXCAVATOR_SIDE_PNG}`;
+  const excavatorTopImgSrc = `${assetOrigin}${EXCAVATOR_TOP_PNG}`;
+  const truckTopImgSrc = `${assetOrigin}${TRUCK_TOP_PNG}`;
+  const rasterKnockoutId = `raster-print-knock-${Math.random().toString(36).slice(2, 10)}`;
+  const rasterKnockoutValues = `1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  -1 -1 -1 0 ${EXCAVATOR_SIDE_LIGHT_BG_KNOCKOUT}`;
   const printObject = (o: CanvasObjectData) => {
     switch (o.type) {
       case "trenchCross": {
@@ -237,16 +257,11 @@ function buildPrintableSvg(state: CanvasState, assetOrigin = "") {
                 ${markerLines}`;
       }
       case "excavatorSide":
-        return `<image href="${excavatorImgSrc}" xlink:href="${excavatorImgSrc}" x="${o.x}" y="${o.y}" width="${o.width}" height="${o.height}" preserveAspectRatio="xMidYMid meet" />`;
+        return `<image href="${excavatorSideImgSrc}" xlink:href="${excavatorSideImgSrc}" filter="url(#${rasterKnockoutId})" x="${o.x}" y="${o.y}" width="${o.width}" height="${o.height}" preserveAspectRatio="xMidYMid meet" />`;
       case "excavatorTop":
-        return `<rect x="${o.x + o.width * 0.04}" y="${o.y + o.height * 0.08}" width="${o.width * 0.2}" height="${o.height * 0.84}" fill="#111827" />
-                <rect x="${o.x + o.width * 0.62}" y="${o.y + o.height * 0.08}" width="${o.width * 0.2}" height="${o.height * 0.84}" fill="#111827" />
-                <rect x="${o.x + o.width * 0.24}" y="${o.y + o.height * 0.18}" width="${o.width * 0.42}" height="${o.height * 0.64}" fill="#f59e0b" stroke="#111827" stroke-width="2" />
-                <line x1="${o.x + o.width * 0.28}" y1="${o.y + o.height * 0.28}" x2="${o.x + o.width * 0.6}" y2="${o.y + o.height * 0.28}" stroke="#fff" stroke-width="1.7" />`;
+        return `<image href="${excavatorTopImgSrc}" xlink:href="${excavatorTopImgSrc}" filter="url(#${rasterKnockoutId})" x="${o.x}" y="${o.y}" width="${o.width}" height="${o.height}" preserveAspectRatio="xMidYMid meet" />`;
       case "truckTop":
-        return `<rect x="${o.x}" y="${o.y + o.height * 0.16}" width="${o.width * 0.68}" height="${o.height * 0.68}" fill="#60a5fa" stroke="#111827" stroke-width="2" />
-                <rect x="${o.x + o.width * 0.7}" y="${o.y + o.height * 0.24}" width="${o.width * 0.24}" height="${o.height * 0.52}" fill="#fb923c" stroke="#7c2d12" stroke-width="2" />
-                <line x1="${o.x + o.width * 0.04}" y1="${o.y + o.height * 0.26}" x2="${o.x + o.width * 0.62}" y2="${o.y + o.height * 0.26}" stroke="#fff" stroke-width="1.6" />`;
+        return `<image href="${truckTopImgSrc}" xlink:href="${truckTopImgSrc}" filter="url(#${rasterKnockoutId})" x="${o.x}" y="${o.y}" width="${o.width}" height="${o.height}" preserveAspectRatio="xMidYMid meet" />`;
       case "spoilPile":
         return `<ellipse cx="${o.x + o.width / 2}" cy="${o.y + o.height * 0.72}" rx="${o.width * 0.48}" ry="${o.height * 0.3}" fill="#b08968" stroke="#3f3f46" stroke-width="2" />
                 <ellipse cx="${o.x + o.width / 2}" cy="${o.y + o.height * 0.62}" rx="${o.width * 0.35}" ry="${o.height * 0.16}" fill="#ffffff33" />`;
@@ -309,6 +324,11 @@ function buildPrintableSvg(state: CanvasState, assetOrigin = "") {
 
   return `
     <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${VIEW_W} ${VIEW_H}" width="100%" style="border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;">
+      <defs>
+        <filter id="${rasterKnockoutId}" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+          <feColorMatrix in="SourceGraphic" type="matrix" values="${rasterKnockoutValues}" />
+        </filter>
+      </defs>
       ${gridMarkup}
       ${objectMarkup}
       ${measurementMarkup}
@@ -606,20 +626,6 @@ export function TrenchPlanner() {
     }));
   };
 
-  const reorderSelected = (dir: "backward" | "forward") => {
-    if (!selectedObject) return;
-    setCurrent((prev) => {
-      const idx = prev.objects.findIndex((o) => o.id === selectedObject.id);
-      if (idx < 0) return prev;
-      const target = dir === "forward" ? idx + 1 : idx - 1;
-      if (target < 0 || target >= prev.objects.length) return prev;
-      const list = [...prev.objects];
-      const [item] = list.splice(idx, 1);
-      list.splice(target, 0, item);
-      return { ...prev, objects: list };
-    });
-  };
-
   const clearActiveCanvas = () => {
     if (!window.confirm("Er du sikker på at du vil tømme aktiv arbeidsflate?")) return;
     setCurrent({ objects: [], measurements: [] });
@@ -646,6 +652,8 @@ export function TrenchPlanner() {
   const showSafetyMeasures = activeTab === "cross" && trenchDepthMeters > 2;
   const selectedPlanTrench = selectedObject?.type === "trenchPlan" ? current.present.objects.find((o) => o.id === selectedObject.id) : null;
   const selectedSpoilLong = selectedObject?.type === "spoilPileLong" ? current.present.objects.find((o) => o.id === selectedObject.id) : null;
+  const selectedExcavatorTop = selectedObject?.type === "excavatorTop" ? current.present.objects.find((o) => o.id === selectedObject.id) : null;
+  const selectedTruckTop = selectedObject?.type === "truckTop" ? current.present.objects.find((o) => o.id === selectedObject.id) : null;
 
   const patchTrenchWallAnglesFor = (objectId: string, patch: { leftDeg?: number; rightDeg?: number }) => {
     setCurrent((prev) => {
@@ -681,6 +689,51 @@ export function TrenchPlanner() {
         if (o.id !== selectedObject.id) return o;
         const center = o.x + o.width / 2;
         return { ...o, width: nextWidth, x: center - nextWidth / 2 };
+      })
+    }));
+  };
+
+  const updateExcavatorSideWidth = (width: number) => {
+    if (!selectedObject || selectedObject.type !== "excavatorSide") return;
+    const nextW = Math.max(180, Math.min(1400, Math.round(width / 5) * 5));
+    const nextH = Math.round(nextW * EXCAVATOR_SIDE_ASPECT);
+    setCurrent((prev) => ({
+      ...prev,
+      objects: prev.objects.map((o) => {
+        if (o.id !== selectedObject.id) return o;
+        const cx = o.x + o.width / 2;
+        const cy = o.y + o.height / 2;
+        return { ...o, width: nextW, height: nextH, x: cx - nextW / 2, y: cy - nextH / 2 };
+      })
+    }));
+  };
+
+  const updateExcavatorTopWidth = (width: number) => {
+    if (!selectedObject || selectedObject.type !== "excavatorTop") return;
+    const nextW = Math.max(80, Math.min(420, Math.round(width / 5) * 5));
+    const nextH = Math.round(nextW * EXCAVATOR_TOP_ASPECT);
+    setCurrent((prev) => ({
+      ...prev,
+      objects: prev.objects.map((o) => {
+        if (o.id !== selectedObject.id) return o;
+        const cx = o.x + o.width / 2;
+        const cy = o.y + o.height / 2;
+        return { ...o, width: nextW, height: nextH, x: cx - nextW / 2, y: cy - nextH / 2 };
+      })
+    }));
+  };
+
+  const updateTruckTopWidth = (width: number) => {
+    if (!selectedObject || selectedObject.type !== "truckTop") return;
+    const nextW = Math.max(200, Math.min(900, Math.round(width / 5) * 5));
+    const nextH = Math.round(nextW * TRUCK_TOP_ASPECT);
+    setCurrent((prev) => ({
+      ...prev,
+      objects: prev.objects.map((o) => {
+        if (o.id !== selectedObject.id) return o;
+        const cx = o.x + o.width / 2;
+        const cy = o.y + o.height / 2;
+        return { ...o, width: nextW, height: nextH, x: cx - nextW / 2, y: cy - nextH / 2 };
       })
     }));
   };
@@ -1059,8 +1112,27 @@ export function TrenchPlanner() {
             <>
               <p className="text-xs text-slate-600">
                 Vel eit symbol og trykk <strong>Innstillingar</strong> på verktøylinja over symbolet for grøfteveggar (V/H),{" "}
-                <strong>helning</strong> på stige, og <strong>bredde</strong> på spunt eller grøftekasse. Kvar stige og kvar grøft har eigne verdiar.
+                <strong>helning</strong> på stige, og <strong>bredde</strong> på spunt eller grøftekasse. Kvar stige og kvar grøft har eigne verdiar.{" "}
+                <strong>Skalering</strong> av gravemaskin (side) finn du under når maskina er valt.
               </p>
+              {selectedObject?.type === "excavatorSide" && (
+                <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+                  <div className="text-xs font-medium text-slate-800">Gravemaskin (side) – skalering</div>
+                  <input
+                    type="range"
+                    min={180}
+                    max={1400}
+                    step={5}
+                    value={selectedObject.width}
+                    onChange={(e) => updateExcavatorSideWidth(Number(e.target.value))}
+                    className="w-full"
+                  />
+                  <div className="text-[11px] text-slate-600">
+                    {(selectedObject.width / GRID_UNIT).toFixed(1).replace(".", ",")} m ×{" "}
+                    {(selectedObject.height / GRID_UNIT).toFixed(1).replace(".", ",")} m (proporsjonar bevarte)
+                  </div>
+                </div>
+              )}
               {showSafetyMeasures && (
                 <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
                   Grøftedybde over 2,0 m: vurder spunt eller grøftekasse.
@@ -1108,6 +1180,42 @@ export function TrenchPlanner() {
                     className="w-full"
                   />
                   <div className="text-xs text-slate-600">{(selectedSpoilLong.width / GRID_UNIT).toFixed(1).replace(".", ",")} m</div>
+                </div>
+              )}
+              {selectedExcavatorTop && (
+                <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+                  <div className="text-xs font-medium text-slate-800">Gravemaskin (ovenfra) – skalering</div>
+                  <input
+                    type="range"
+                    min={80}
+                    max={420}
+                    step={5}
+                    value={selectedExcavatorTop.width}
+                    onChange={(e) => updateExcavatorTopWidth(Number(e.target.value))}
+                    className="w-full"
+                  />
+                  <div className="text-[11px] text-slate-600">
+                    {(selectedExcavatorTop.width / GRID_UNIT).toFixed(1).replace(".", ",")} m ×{" "}
+                    {(selectedExcavatorTop.height / GRID_UNIT).toFixed(1).replace(".", ",")} m (proporsjonar bevarte)
+                  </div>
+                </div>
+              )}
+              {selectedTruckTop && (
+                <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+                  <div className="text-xs font-medium text-slate-800">Lastebil (ovenfra) – skalering</div>
+                  <input
+                    type="range"
+                    min={200}
+                    max={900}
+                    step={5}
+                    value={selectedTruckTop.width}
+                    onChange={(e) => updateTruckTopWidth(Number(e.target.value))}
+                    className="w-full"
+                  />
+                  <div className="text-[11px] text-slate-600">
+                    {(selectedTruckTop.width / GRID_UNIT).toFixed(1).replace(".", ",")} m ×{" "}
+                    {(selectedTruckTop.height / GRID_UNIT).toFixed(1).replace(".", ",")} m (proporsjonar bevarte)
+                  </div>
                 </div>
               )}
               <div className="text-xs text-slate-500">Tips: velg et grøfte- eller masse-symbol for å justere det spesifikke objektet når du har flere.</div>
@@ -1169,8 +1277,6 @@ export function TrenchPlanner() {
               onDelete={deleteSelected}
               onDuplicate={duplicateSelected}
               onRotate={rotateSelected}
-              onSendBackward={() => reorderSelected("backward")}
-              onBringForward={() => reorderSelected("forward")}
               rotateLabel={activeTab === "cross" && selectedObject?.type === "excavatorSide" ? "Speilvend" : "Roter 90°"}
               menu={activeTab === "cross" ? renderSymbolSettingsMenu() : undefined}
             />

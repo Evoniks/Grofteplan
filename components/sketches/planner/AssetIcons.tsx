@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useId } from "react";
 import { getTrenchCrossCorners } from "@/components/sketches/planner/trenchCrossGeometry";
 
 export type ObjectType =
@@ -18,8 +19,45 @@ export type ObjectType =
   | "pipe"
   | "escapeRoute";
 
-/** Bytt ut denne fila i `public/skisse/` med din eigen PNG (gjerne med gjennomsiktig bakgrunn). */
+/** Bytt ut filene i `public/skisse/` med dine eigne PNG (gjerne med gjennomsiktig bakgrunn). */
 export const EXCAVATOR_SIDE_PNG = "/skisse/excavator-side.png";
+export const EXCAVATOR_TOP_PNG = "/skisse/excavator-top.png";
+export const TRUCK_TOP_PNG = "/skisse/truck-top.png";
+
+/** Standard mål for side-gravemaskin (50 px = 1 m). Brukes til størrelseslider og fast proporsjon. */
+export const EXCAVATOR_SIDE_PRESET_WIDTH = 575;
+export const EXCAVATOR_SIDE_PRESET_HEIGHT = 250;
+export const EXCAVATOR_SIDE_ASPECT = EXCAVATOR_SIDE_PRESET_HEIGHT / EXCAVATOR_SIDE_PRESET_WIDTH;
+
+/**
+ * SVG filter: A' = k − (R+G+B) i normalisert sRGB. Gjer kvit/lys grå (inkl. «bake-in» rutenett) gjennomsiktig;
+ * mettede fargar på køyretøy blir verande. Senk til ~2.68 om lyse flater blir for gjennomsiktige.
+ */
+export const EXCAVATOR_SIDE_LIGHT_BG_KNOCKOUT = 2.72;
+
+function RasterAssetIcon(props: IconProps & { href: string }) {
+  const { href, x, y, width, height, ...frameRest } = props;
+  const filterId = `raster-knock-${useId().replace(/:/g, "")}`;
+  const knockoutValues = `1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  -1 -1 -1 0 ${EXCAVATOR_SIDE_LIGHT_BG_KNOCKOUT}`;
+  return (
+    <IconFrame {...frameRest} x={x} y={y} width={width} height={height} withShadow={false}>
+      <defs>
+        <filter id={filterId} x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
+          <feColorMatrix in="SourceGraphic" type="matrix" values={knockoutValues} />
+        </filter>
+      </defs>
+      <image
+        href={href}
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        preserveAspectRatio="xMidYMid meet"
+        filter={`url(#${filterId})`}
+      />
+    </IconFrame>
+  );
+}
 
 type IconProps = {
   x: number;
@@ -96,45 +134,15 @@ export function TrenchPlanIcon(props: IconProps) {
 }
 
 export function ExcavatorSideIcon(props: IconProps) {
-  const { x, y, width, height } = props;
-  return (
-    <IconFrame {...props}>
-      <image
-        href={EXCAVATOR_SIDE_PNG}
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        preserveAspectRatio="xMidYMid meet"
-      />
-    </IconFrame>
-  );
+  return <RasterAssetIcon {...props} href={EXCAVATOR_SIDE_PNG} />;
 }
 
 export function ExcavatorTopIcon(props: IconProps) {
-  const { x, y, width, height } = props;
-  return (
-    <IconFrame {...props}>
-      <rect x={x + width * 0.04} y={y + height * 0.08} width={width * 0.2} height={height * 0.84} fill="#111827" />
-      <rect x={x + width * 0.62} y={y + height * 0.08} width={width * 0.2} height={height * 0.84} fill="#111827" />
-      <rect x={x + width * 0.24} y={y + height * 0.18} width={width * 0.42} height={height * 0.64} fill="#f59e0b" stroke="#111827" strokeWidth={2} />
-      <rect x={x + width * 0.34} y={y + height * 0.26} width={width * 0.16} height={height * 0.48} fill="#bfdbfe" stroke="#1f2937" strokeWidth={1.5} />
-      <line x1={x + width * 0.28} y1={y + height * 0.28} x2={x + width * 0.6} y2={y + height * 0.28} stroke="#fff" strokeWidth={1.7} />
-      <polygon points={`${x + width * 0.9},${y + height * 0.5} ${x + width * 0.76},${y + height * 0.4} ${x + width * 0.76},${y + height * 0.6}`} fill="#111827" />
-    </IconFrame>
-  );
+  return <RasterAssetIcon {...props} href={EXCAVATOR_TOP_PNG} />;
 }
 
 export function TruckTopIcon(props: IconProps) {
-  const { x, y, width, height } = props;
-  return (
-    <IconFrame {...props}>
-      <rect x={x} y={y + height * 0.16} width={width * 0.68} height={height * 0.68} fill="#60a5fa" stroke="#111827" strokeWidth={2} />
-      <rect x={x + width * 0.7} y={y + height * 0.24} width={width * 0.24} height={height * 0.52} fill="#fb923c" stroke="#7c2d12" strokeWidth={2} />
-      <rect x={x + width * 0.74} y={y + height * 0.32} width={width * 0.13} height={height * 0.36} fill="#bfdbfe" stroke="#1f2937" strokeWidth={1.2} />
-      <line x1={x + width * 0.04} y1={y + height * 0.26} x2={x + width * 0.62} y2={y + height * 0.26} stroke="#fff" strokeWidth={1.6} />
-    </IconFrame>
-  );
+  return <RasterAssetIcon {...props} href={TRUCK_TOP_PNG} />;
 }
 
 export function SpoilPileIcon(props: IconProps) {
