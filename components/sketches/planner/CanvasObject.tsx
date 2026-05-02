@@ -12,6 +12,8 @@ export type CanvasObjectData = {
   rotation: number;
   meta?: {
     slopeRatio?: number;
+    slopeAngleLeftDeg?: number;
+    slopeAngleRightDeg?: number;
     lengthMeters?: number;
     mirrored?: boolean;
   };

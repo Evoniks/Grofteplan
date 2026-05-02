@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { getTrenchCrossCorners } from "@/components/sketches/planner/trenchCrossGeometry";
 
 export type ObjectType =
   | "trenchCross"
@@ -26,6 +27,8 @@ type IconProps = {
   rotation?: number;
   meta?: {
     slopeRatio?: number;
+    slopeAngleLeftDeg?: number;
+    slopeAngleRightDeg?: number;
     lengthMeters?: number;
     mirrored?: boolean;
   };
@@ -46,8 +49,7 @@ function IconFrame({ children, x, y, width, height, rotation = 0, withShadow = t
 
 export function TrenchCrossIcon(props: IconProps) {
   const { x, y, width, height, meta } = props;
-  const slope = Math.max(0.4, Math.min(2, meta?.slopeRatio ?? 1));
-  const topInset = Math.max(width * 0.02, Math.min(width * 0.32, width * (0.34 - slope * 0.1)));
+  const { topLeft, topRight, bottomLeft, bottomRight } = getTrenchCrossCorners({ x, y, width, height, meta });
   return (
     <IconFrame {...props}>
       <defs>
@@ -57,7 +59,7 @@ export function TrenchCrossIcon(props: IconProps) {
         </linearGradient>
       </defs>
       <polygon
-        points={`${x + topInset},${y + height * 0.04} ${x + width - topInset},${y + height * 0.04} ${x + width * 0.63},${y + height * 0.95} ${x + width * 0.37},${y + height * 0.95}`}
+        points={`${topLeft.x},${topLeft.y} ${topRight.x},${topRight.y} ${bottomRight.x},${bottomRight.y} ${bottomLeft.x},${bottomLeft.y}`}
         fill={`url(#trench-cross-${x}-${y})`}
         stroke="#0f172a"
         strokeWidth={2.5}
@@ -99,7 +101,16 @@ export function ExcavatorSideIcon(props: IconProps) {
   const m = Math.min(w, h);
   const outline = Math.max(1.5, m * 0.014);
   const jointR = m * 0.038;
-  /* Fylte ledd-armar (ikkje stroke-kurve), belte med kjetting, skuffe med bue og tenner — sideprofil ~11,5×5 enheter */
+  /* Sideprofil: venstre=bak (klosett), høgre=fram/bom. Brøkar = andel av ikonboks (matcher skala når 1 rute på canvas = 1 m). */
+  const DECK_LEFT = 0.12; // nedkant motorhus / overbygg (ikkje utanpå belte)
+  const DECK_RIGHT = 0.38;
+  const CAB_LEFT = 0.175; // framkant maskin — på gult dekk, ikkje over klosett
+  const CAB_RIGHT = 0.318;
+  const CAB_TOP = 0.35;
+  const CAB_FLOOR = 0.718;
+  const SWING_CX = (DECK_LEFT + DECK_RIGHT) / 2 + 0.02; // litt mot fram for bomfeste
+  const SWING_CY = 0.72;
+  /* Fylte ledd-armar, belte, skuffe — proporsjonar ~11,5×5 m i boksen */
   return (
     <IconFrame {...props}>
       <ellipse cx={gx(0.48)} cy={gy(0.93)} rx={w * 0.42} ry={h * 0.04} fill="#0f172a18" />
@@ -149,30 +160,56 @@ export function ExcavatorSideIcon(props: IconProps) {
       <line x1={gx(0.22)} y1={gy(0.495)} x2={gx(0.36)} y2={gy(0.515)} stroke="#111827" strokeWidth={outline * 0.9} />
       <line x1={gx(0.22)} y1={gy(0.555)} x2={gx(0.36)} y2={gy(0.575)} stroke="#111827" strokeWidth={outline * 0.9} />
       <line x1={gx(0.22)} y1={gy(0.615)} x2={gx(0.36)} y2={gy(0.635)} stroke="#111827" strokeWidth={outline * 0.9} />
-      {/* Dekkplate (svingkrans/overbygg) — gjer det tydeleg at førerhus står på maskina */}
+      {/* Dekkplate = same breidd som motorhus nedkant (DECK_LEFT–DECK_RIGHT), ikkje ut over belte */}
       <rect
-        x={gx(0.082)}
+        x={gx(DECK_LEFT)}
         y={gy(0.698)}
-        width={w * 0.33}
+        width={w * (DECK_RIGHT - DECK_LEFT)}
         height={h * 0.026}
         rx={h * 0.012}
         fill="#fbbf24"
         stroke="#111827"
         strokeWidth={outline * 0.75}
       />
-      {/* Svingkrans under førerhus (dekk) */}
-      <ellipse cx={gx(0.33)} cy={gy(0.72)} rx={w * 0.055} ry={h * 0.022} fill="#d97706" stroke="#111827" strokeWidth={outline * 0.85} />
-      {/* Førerhus — bunn flusk med dekk / svingkrans (ikkje «flytande» over golvet) */}
+      {/* Svingkrans (midt framfor bak på dekk) */}
+      <ellipse cx={gx(SWING_CX)} cy={gy(SWING_CY)} rx={w * 0.055} ry={h * 0.022} fill="#d97706" stroke="#111827" strokeWidth={outline * 0.85} />
+      {/* Førerhus på framkant av overbygg — innanfor [DECK_LEFT,DECK_RIGHT], venstre for bomfeste */}
       <path
-        d={`M ${gx(0.095)} ${gy(0.718)} L ${gx(0.095)} ${gy(0.34)} L ${gx(0.268)} ${gy(0.34)} L ${gx(0.268)} ${gy(0.718)} Z`}
+        d={`M ${gx(CAB_LEFT)} ${gy(CAB_FLOOR)} L ${gx(CAB_LEFT)} ${gy(CAB_TOP)} L ${gx(CAB_RIGHT)} ${gy(CAB_TOP)} L ${gx(CAB_RIGHT)} ${gy(CAB_FLOOR)} Z`}
         fill="#eab308"
         stroke="#111827"
         strokeWidth={outline}
         strokeLinejoin="round"
       />
-      <rect x={gx(0.11)} y={gy(0.38)} width={w * 0.12} height={h * 0.14} rx={2} fill="#bfdbfe" stroke="#1e3a5f" strokeWidth={outline * 0.6} />
-      <rect x={gx(0.235)} y={gy(0.4)} width={w * 0.028} height={h * 0.1} rx={1} fill="#93c5fd" stroke="#1e3a5f" strokeWidth={outline * 0.5} />
-      <line x1={gx(0.1)} y1={gy(0.715)} x2={gx(0.263)} y2={gy(0.715)} stroke="#ca8a04" strokeWidth={outline * 0.5} opacity={0.85} />
+      <rect
+        x={gx(CAB_LEFT + 0.02)}
+        y={gy(CAB_TOP + 0.05)}
+        width={w * 0.1}
+        height={h * 0.13}
+        rx={2}
+        fill="#bfdbfe"
+        stroke="#1e3a5f"
+        strokeWidth={outline * 0.6}
+      />
+      <rect
+        x={gx(CAB_RIGHT - 0.045)}
+        y={gy(CAB_TOP + 0.07)}
+        width={w * 0.028}
+        height={h * 0.095}
+        rx={1}
+        fill="#93c5fd"
+        stroke="#1e3a5f"
+        strokeWidth={outline * 0.5}
+      />
+      <line
+        x1={gx(CAB_LEFT + 0.008)}
+        y1={gy(0.715)}
+        x2={gx(CAB_RIGHT - 0.008)}
+        y2={gy(0.715)}
+        stroke="#ca8a04"
+        strokeWidth={outline * 0.5}
+        opacity={0.85}
+      />
       {/* Bom: tjukk fylt firkantring (ikkje stroke-boge) */}
       <path
         d={`M ${gx(0.335)} ${gy(0.695)} L ${gx(0.395)} ${gy(0.655)} L ${gx(0.735)} ${gy(0.095)} L ${gx(0.695)} ${gy(0.125)} Z`}

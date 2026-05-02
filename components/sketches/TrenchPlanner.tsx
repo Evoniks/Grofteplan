@@ -7,8 +7,17 @@ import { type ObjectType } from "@/components/sketches/planner/AssetIcons";
 import { MeasurementLine, type MeasurementView } from "@/components/sketches/planner/MeasurementLine";
 import { ObjectToolbar } from "@/components/sketches/planner/ObjectToolbar";
 import { useCanvasHistory } from "@/components/sketches/planner/useCanvasHistory";
+import {
+  clampWallAngleDeg,
+  getTrenchCrossCorners,
+  MAX_WALL_ANGLE_DEG,
+  MIN_WALL_ANGLE_DEG,
+  resolveTrenchWallAngles
+} from "@/components/sketches/planner/trenchCrossGeometry";
 
 type TabKey = "cross" | "plan";
+/** Justering av grøftevegg: V = venstre, H = høyre, begge = V + H */
+type TrenchWallEditScope = "begge" | "venstre" | "hoyre";
 type Selection = { kind: "object" | "measurement"; id: string } | null;
 type SnapPointType = "trenchEdgeLeft" | "trenchEdgeRight" | "nearestTrackEdge" | "nearestBaseEdge" | "nearestWheelEdge";
 type SnapPoint = { objectId: string; type: SnapPointType; x: number; y: number };
@@ -26,14 +35,6 @@ type WorkPlanData = {
 const VIEW_W = 1600;
 const VIEW_H = 900;
 const GRID_UNIT = 50; // 1 rute = 1 meter
-const MIN_SLOPE_PERCENT = 45;
-const MAX_SLOPE_PERCENT = 90;
-const MIN_SLOPE_RATIO = 100 / MAX_SLOPE_PERCENT; // 1.11:1
-const MAX_SLOPE_RATIO = 100 / MIN_SLOPE_PERCENT; // 2.22:1
-
-function clampSlopeRatio(value: number) {
-  return Math.max(MIN_SLOPE_RATIO, Math.min(MAX_SLOPE_RATIO, value));
-}
 
 function escapeHtml(text: string) {
   return text
@@ -62,7 +63,12 @@ function parseNumericInput(input: string) {
 
 const presets: Record<ObjectType, Omit<CanvasObjectData, "id" | "x" | "y" | "rotation">> = {
   // Målestokk: 50 px = 1 m
-  trenchCross: { type: "trenchCross", width: 500, height: 200 }, // ca 10 m toppbredde, 4 m dybde
+  trenchCross: {
+    type: "trenchCross",
+    width: 500,
+    height: 200,
+    meta: { slopeAngleLeftDeg: 45, slopeAngleRightDeg: 45 }
+  }, // ca 10 m toppbredde, 4 m dybde
   trenchPlan: { type: "trenchPlan", width: 750, height: 130 }, // 15 m lengde, 2.6 m korridor
   excavatorSide: { type: "excavatorSide", width: 575, height: 250 }, // 11,5 × 5 m (1 rute = 1 m)
   excavatorTop: { type: "excavatorTop", width: 160, height: 340 }, // ca 3.2 x 6.8 m
@@ -99,7 +105,14 @@ const objectLabels: Record<ObjectType, string> = {
 const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 
 const defaultCrossSectionObjects: CanvasObjectData[] = [
-  { id: uid("trench"), ...presets.trenchCross, x: 520, y: 210, rotation: 0, meta: { slopeRatio: 1 } },
+  {
+    id: uid("trench"),
+    ...presets.trenchCross,
+    x: 520,
+    y: 210,
+    rotation: 0,
+    meta: { slopeAngleLeftDeg: 45, slopeAngleRightDeg: 45 }
+  },
   { id: uid("spoil"), ...presets.spoilPile, x: 210, y: 150, rotation: 0 },
   { id: uid("exc"), ...presets.excavatorSide, x: 990, y: 120, rotation: 0 },
   { id: uid("lad"), ...presets.ladder, x: 760, y: 220, rotation: -14 },
@@ -135,11 +148,10 @@ function getSnapPoints(o: CanvasObjectData): SnapPoint[] {
 
   switch (o.type) {
     case "trenchCross": {
-      const slope = Math.max(0.4, Math.min(2, o.meta?.slopeRatio ?? 1));
-      const topInset = Math.max(o.width * 0.02, Math.min(o.width * 0.32, o.width * (0.34 - slope * 0.1)));
+      const c = getTrenchCrossCorners({ x: o.x, y: o.y, width: o.width, height: o.height, meta: o.meta });
       return [
-        { objectId: o.id, type: "trenchEdgeLeft", x: left + topInset, y: top + o.height * 0.08 },
-        { objectId: o.id, type: "trenchEdgeRight", x: right - topInset, y: top + o.height * 0.08 }
+        { objectId: o.id, type: "trenchEdgeLeft", x: c.topLeft.x, y: top + o.height * 0.08 },
+        { objectId: o.id, type: "trenchEdgeRight", x: c.topRight.x, y: top + o.height * 0.08 }
       ];
     }
     case "trenchPlan":
@@ -189,9 +201,8 @@ function buildPrintableSvg(state: CanvasState) {
   const printObject = (o: CanvasObjectData) => {
     switch (o.type) {
       case "trenchCross": {
-        const slope = Math.max(0.4, Math.min(2, o.meta?.slopeRatio ?? 1));
-        const topInset = Math.max(o.width * 0.02, Math.min(o.width * 0.32, o.width * (0.34 - slope * 0.1)));
-        return `<polygon points="${o.x + topInset},${o.y + o.height * 0.04} ${o.x + o.width - topInset},${o.y + o.height * 0.04} ${o.x + o.width * 0.63},${o.y + o.height * 0.95} ${o.x + o.width * 0.37},${o.y + o.height * 0.95}" fill="#bfdbfe" stroke="#0f172a" stroke-width="2.5" />`;
+        const c = getTrenchCrossCorners({ x: o.x, y: o.y, width: o.width, height: o.height, meta: o.meta });
+        return `<polygon points="${c.topLeft.x},${c.topLeft.y} ${c.topRight.x},${c.topRight.y} ${c.bottomRight.x},${c.bottomRight.y} ${c.bottomLeft.x},${c.bottomLeft.y}" fill="#bfdbfe" stroke="#0f172a" stroke-width="2.5" />`;
       }
       case "trenchPlan": {
         const lengthMeters = Math.max(1, Math.round(o.meta?.lengthMeters ?? o.width / GRID_UNIT));
@@ -291,7 +302,10 @@ export function TrenchPlanner() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
   const [panning, setPanning] = useState<{ x: number; y: number } | null>(null);
-  const [slopeInput, setSlopeInput] = useState("45,0");
+  const [slopeInputLeft, setSlopeInputLeft] = useState("45,0");
+  const [slopeInputRight, setSlopeInputRight] = useState("45,0");
+  const [trenchWallScope, setTrenchWallScope] = useState<TrenchWallEditScope>("begge");
+  const [trenchWallsLinked, setTrenchWallsLinked] = useState(false);
   const [workPlan, setWorkPlan] = useState<WorkPlanData>({
     lengthProfile: "",
     soilAndInstallations: "",
@@ -601,7 +615,10 @@ export function TrenchPlanner() {
 
   const activeTrenchCross = current.present.objects.find((o) => o.type === "trenchCross");
   const activeTrenchPlan = current.present.objects.find((o) => o.type === "trenchPlan");
-  const currentSlopeRatio = activeTrenchCross?.meta?.slopeRatio ?? 1;
+  const trenchWallAngles = useMemo(
+    () => resolveTrenchWallAngles(activeTrenchCross?.meta),
+    [activeTrenchCross?.meta]
+  );
   const currentPlanLengthMeters = activeTrenchPlan?.meta?.lengthMeters ?? Math.round((activeTrenchPlan?.width ?? 750) / GRID_UNIT);
   const currentPlanWidthMeters = (activeTrenchPlan?.height ?? 130) / GRID_UNIT;
   const activeLadder = current.present.objects.find((o) => o.type === "ladder");
@@ -610,23 +627,21 @@ export function TrenchPlanner() {
   const showSafetyMeasures = activeTab === "cross" && trenchDepthMeters > 2;
   const selectedPlanTrench = selectedObject?.type === "trenchPlan" ? current.present.objects.find((o) => o.id === selectedObject.id) : null;
   const selectedSpoilLong = selectedObject?.type === "spoilPileLong" ? current.present.objects.find((o) => o.id === selectedObject.id) : null;
-  const currentSlopeDegrees = (Math.atan(1 / currentSlopeRatio) * 180) / Math.PI;
-  const currentSlopePercent = 100 / currentSlopeRatio;
-  const minSlopeDegrees = (Math.atan(MIN_SLOPE_PERCENT / 100) * 180) / Math.PI;
-  const maxSlopeDegrees = (Math.atan(MAX_SLOPE_PERCENT / 100) * 180) / Math.PI;
 
-  const updateCrossSlope = (slopeRatio: number) => {
+  const patchTrenchWallAngles = (patch: { leftDeg?: number; rightDeg?: number }) => {
     setCurrent((prev) => {
       const trench = prev.objects.find((o) => o.type === "trenchCross");
       if (!trench) return prev;
+      const cur = resolveTrenchWallAngles(trench.meta);
+      const leftDeg = clampWallAngleDeg(patch.leftDeg ?? cur.leftDeg);
+      const rightDeg = clampWallAngleDeg(patch.rightDeg ?? cur.rightDeg);
       return {
         ...prev,
-        objects: prev.objects.map((o) => {
-          if (o.type === "trenchCross") {
-            return { ...o, meta: { ...o.meta, slopeRatio } };
-          }
-          return o;
-        })
+        objects: prev.objects.map((o) =>
+          o.type === "trenchCross"
+            ? { ...o, meta: { ...o.meta, slopeAngleLeftDeg: leftDeg, slopeAngleRightDeg: rightDeg } }
+            : o
+        )
       };
     });
   };
@@ -709,14 +724,9 @@ export function TrenchPlanner() {
 
   useEffect(() => {
     if (activeTab !== "cross") return;
-    setSlopeInput(currentSlopeDegrees.toFixed(1).replace(".", ","));
-  }, [activeTab, currentSlopeDegrees]);
-
-  const onSlopeSliderChange = (rawValue: number) => {
-    const radians = (rawValue * Math.PI) / 180;
-    const ratio = 1 / Math.tan(radians);
-    updateCrossSlope(ratio);
-  };
+    setSlopeInputLeft(trenchWallAngles.leftDeg.toFixed(1).replace(".", ","));
+    setSlopeInputRight(trenchWallAngles.rightDeg.toFixed(1).replace(".", ","));
+  }, [activeTab, trenchWallAngles.leftDeg, trenchWallAngles.rightDeg]);
 
   const resetAll = () => {
     if (!window.confirm("Er du sikker på at du vil tilbakestille hele arbeidsflaten?")) return;
@@ -790,41 +800,203 @@ export function TrenchPlanner() {
         <div className="space-y-3 border-t border-slate-200 pt-4">
           {activeTab === "cross" ? (
             <>
-              <div className="text-sm font-medium text-slate-800">Grøfteskråning (grader)</div>
-              <div className="grid grid-cols-[1fr_auto] gap-2">
-                <div className="flex items-center rounded-md border border-slate-300 px-2 text-sm text-slate-700">
-                  Helning
+              <div className="text-sm font-medium text-slate-800">Grøftevegger</div>
+              <p className="text-xs text-slate-600">
+                Vinkel mot horisontal: <strong>45°</strong> skrå vegg, <strong>90°</strong> loddrett (rett vinkel mot grøftebunn).
+              </p>
+
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium text-slate-700">Juster side</div>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="radio"
+                    name="trench-wall-scope"
+                    checked={trenchWallScope === "begge"}
+                    onChange={() => setTrenchWallScope("begge")}
+                  />
+                  Begge (V og H)
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="radio"
+                    name="trench-wall-scope"
+                    checked={trenchWallScope === "venstre"}
+                    onChange={() => setTrenchWallScope("venstre")}
+                  />
+                  Kun venstre (V)
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="radio"
+                    name="trench-wall-scope"
+                    checked={trenchWallScope === "hoyre"}
+                    onChange={() => setTrenchWallScope("hoyre")}
+                  />
+                  Kun høyre (H)
+                </label>
+              </div>
+
+              {trenchWallScope === "begge" && (
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={trenchWallsLinked}
+                    onChange={(e) => setTrenchWallsLinked(e.target.checked)}
+                  />
+                  Samme vinkel på V og H
+                </label>
+              )}
+
+              {trenchWallScope === "begge" && trenchWallsLinked && (
+                <div className="space-y-1">
+                  <input
+                    type="range"
+                    min={MIN_WALL_ANGLE_DEG}
+                    max={MAX_WALL_ANGLE_DEG}
+                    step={0.1}
+                    value={trenchWallAngles.leftDeg}
+                    onChange={(e) => {
+                      const v = clampWallAngleDeg(Number(e.target.value));
+                      patchTrenchWallAngles({ leftDeg: v, rightDeg: v });
+                    }}
+                    className="w-full"
+                  />
+                  <div className="text-xs text-slate-600">
+                    Vinkel begge vegger: {trenchWallAngles.leftDeg.toFixed(1).replace(".", ",")}°
+                  </div>
                 </div>
-                <input
-                  className="h-9 w-28 rounded-md border border-slate-300 px-2 text-sm"
-                  inputMode="decimal"
-                  placeholder="f.eks. 34,0 eller 1/2"
-                  value={slopeInput}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setSlopeInput(value);
-                    const parsed = parseNumericInput(value);
-                    if (parsed === null) return;
-                    const radians = (parsed * Math.PI) / 180;
-                    const tan = Math.tan(radians);
-                    if (tan <= 0) return;
-                    updateCrossSlope(1 / tan);
-                  }}
-                />
+              )}
+
+              {trenchWallScope === "begge" && !trenchWallsLinked && (
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <div className="grid grid-cols-[1fr_auto] items-center gap-2 text-xs font-medium text-slate-700">
+                      <span>Venstre (V)</span>
+                      <input
+                        className="h-8 w-24 rounded-md border border-slate-300 px-2 text-sm"
+                        inputMode="decimal"
+                        value={slopeInputLeft}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setSlopeInputLeft(value);
+                          const parsed = parseNumericInput(value);
+                          if (parsed === null) return;
+                          patchTrenchWallAngles({ leftDeg: clampWallAngleDeg(parsed) });
+                        }}
+                      />
+                    </div>
+                    <input
+                      type="range"
+                      min={MIN_WALL_ANGLE_DEG}
+                      max={MAX_WALL_ANGLE_DEG}
+                      step={0.1}
+                      value={trenchWallAngles.leftDeg}
+                      onChange={(e) =>
+                        patchTrenchWallAngles({ leftDeg: clampWallAngleDeg(Number(e.target.value)) })
+                      }
+                      className="w-full"
+                    />
+                    <div className="text-xs text-slate-600">{trenchWallAngles.leftDeg.toFixed(1).replace(".", ",")}°</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="grid grid-cols-[1fr_auto] items-center gap-2 text-xs font-medium text-slate-700">
+                      <span>Høyre (H)</span>
+                      <input
+                        className="h-8 w-24 rounded-md border border-slate-300 px-2 text-sm"
+                        inputMode="decimal"
+                        value={slopeInputRight}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setSlopeInputRight(value);
+                          const parsed = parseNumericInput(value);
+                          if (parsed === null) return;
+                          patchTrenchWallAngles({ rightDeg: clampWallAngleDeg(parsed) });
+                        }}
+                      />
+                    </div>
+                    <input
+                      type="range"
+                      min={MIN_WALL_ANGLE_DEG}
+                      max={MAX_WALL_ANGLE_DEG}
+                      step={0.1}
+                      value={trenchWallAngles.rightDeg}
+                      onChange={(e) =>
+                        patchTrenchWallAngles({ rightDeg: clampWallAngleDeg(Number(e.target.value)) })
+                      }
+                      className="w-full"
+                    />
+                    <div className="text-xs text-slate-600">{trenchWallAngles.rightDeg.toFixed(1).replace(".", ",")}°</div>
+                  </div>
+                </div>
+              )}
+
+              {trenchWallScope === "venstre" && (
+                <div className="space-y-1">
+                  <div className="grid grid-cols-[1fr_auto] items-center gap-2 text-xs font-medium text-slate-700">
+                    <span>Venstre (V)</span>
+                    <input
+                      className="h-8 w-24 rounded-md border border-slate-300 px-2 text-sm"
+                      inputMode="decimal"
+                      value={slopeInputLeft}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setSlopeInputLeft(value);
+                        const parsed = parseNumericInput(value);
+                        if (parsed === null) return;
+                        patchTrenchWallAngles({ leftDeg: clampWallAngleDeg(parsed) });
+                      }}
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min={MIN_WALL_ANGLE_DEG}
+                    max={MAX_WALL_ANGLE_DEG}
+                    step={0.1}
+                    value={trenchWallAngles.leftDeg}
+                    onChange={(e) =>
+                      patchTrenchWallAngles({ leftDeg: clampWallAngleDeg(Number(e.target.value)) })
+                    }
+                    className="w-full"
+                  />
+                  <div className="text-xs text-slate-600">{trenchWallAngles.leftDeg.toFixed(1).replace(".", ",")}°</div>
+                </div>
+              )}
+
+              {trenchWallScope === "hoyre" && (
+                <div className="space-y-1">
+                  <div className="grid grid-cols-[1fr_auto] items-center gap-2 text-xs font-medium text-slate-700">
+                    <span>Høyre (H)</span>
+                    <input
+                      className="h-8 w-24 rounded-md border border-slate-300 px-2 text-sm"
+                      inputMode="decimal"
+                      value={slopeInputRight}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setSlopeInputRight(value);
+                        const parsed = parseNumericInput(value);
+                        if (parsed === null) return;
+                        patchTrenchWallAngles({ rightDeg: clampWallAngleDeg(parsed) });
+                      }}
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min={MIN_WALL_ANGLE_DEG}
+                    max={MAX_WALL_ANGLE_DEG}
+                    step={0.1}
+                    value={trenchWallAngles.rightDeg}
+                    onChange={(e) =>
+                      patchTrenchWallAngles({ rightDeg: clampWallAngleDeg(Number(e.target.value)) })
+                    }
+                    className="w-full"
+                  />
+                  <div className="text-xs text-slate-600">{trenchWallAngles.rightDeg.toFixed(1).replace(".", ",")}°</div>
+                </div>
+              )}
+
+              <div className="text-xs text-slate-500">
+                Tillatt område: {MIN_WALL_ANGLE_DEG}°–{MAX_WALL_ANGLE_DEG}° (vertikal vegg = {MAX_WALL_ANGLE_DEG}°).
               </div>
-              <input
-                type="range"
-                min={minSlopeDegrees}
-                max={maxSlopeDegrees}
-                step={0.1}
-                value={currentSlopeDegrees}
-                onChange={(e) => onSlopeSliderChange(Number(e.target.value))}
-                className="w-full"
-              />
-              <div className="text-xs text-slate-600">
-                Skråning: {currentSlopeDegrees.toFixed(1).replace(".", ",")}° ({currentSlopePercent.toFixed(0)}%)
-              </div>
-              <div className="text-xs text-slate-600">Tillatt område: 45% til 90% helning</div>
 
               <div className="pt-2 text-sm font-medium text-slate-800">Stigevinkel</div>
               <input
