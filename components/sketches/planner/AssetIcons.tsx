@@ -104,10 +104,11 @@ export function ExcavatorSideIcon(props: IconProps) {
   /* Sideprofil: venstre=bak (klosett), høgre=fram/bom. Brøkar = andel av ikonboks (matcher skala når 1 rute på canvas = 1 m). */
   const DECK_LEFT = 0.12; // nedkant motorhus / overbygg (ikkje utanpå belte)
   const DECK_RIGHT = 0.38;
-  const CAB_LEFT = 0.175; // framkant maskin — på gult dekk, ikkje over klosett
-  const CAB_RIGHT = 0.318;
-  const CAB_TOP = 0.35;
-  const CAB_FLOOR = 0.718;
+  /* Førerhus framme på gult dekk, tydeleg innanfor overbygg (venstre klosett 0,06–0,14), ikkje «hengt» ut mot beltkant */
+  const CAB_LEFT = 0.218;
+  const CAB_RIGHT = 0.328;
+  const CAB_TOP = 0.328;
+  const CAB_FLOOR = 0.716;
   const SWING_CX = (DECK_LEFT + DECK_RIGHT) / 2 + 0.02; // litt mot fram for bomfeste
   const SWING_CY = 0.72;
   /* Fylte ledd-armar, belte, skuffe — proporsjonar ~11,5×5 m i boksen */
@@ -182,30 +183,30 @@ export function ExcavatorSideIcon(props: IconProps) {
         strokeLinejoin="round"
       />
       <rect
-        x={gx(CAB_LEFT + 0.02)}
-        y={gy(CAB_TOP + 0.05)}
-        width={w * 0.1}
-        height={h * 0.13}
+        x={gx(CAB_LEFT + 0.015)}
+        y={gy(CAB_TOP + 0.048)}
+        width={w * 0.095}
+        height={h * 0.125}
         rx={2}
         fill="#bfdbfe"
         stroke="#1e3a5f"
         strokeWidth={outline * 0.6}
       />
       <rect
-        x={gx(CAB_RIGHT - 0.045)}
-        y={gy(CAB_TOP + 0.07)}
-        width={w * 0.028}
-        height={h * 0.095}
+        x={gx(CAB_RIGHT - 0.042)}
+        y={gy(CAB_TOP + 0.065)}
+        width={w * 0.026}
+        height={h * 0.09}
         rx={1}
         fill="#93c5fd"
         stroke="#1e3a5f"
         strokeWidth={outline * 0.5}
       />
       <line
-        x1={gx(CAB_LEFT + 0.008)}
-        y1={gy(0.715)}
-        x2={gx(CAB_RIGHT - 0.008)}
-        y2={gy(0.715)}
+        x1={gx(CAB_LEFT + 0.006)}
+        y1={gy(0.712)}
+        x2={gx(CAB_RIGHT - 0.006)}
+        y2={gy(0.712)}
         stroke="#ca8a04"
         strokeWidth={outline * 0.5}
         opacity={0.85}
