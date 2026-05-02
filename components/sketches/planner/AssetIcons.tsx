@@ -92,28 +92,87 @@ export function TrenchPlanIcon(props: IconProps) {
 
 export function ExcavatorSideIcon(props: IconProps) {
   const { x, y, width, height } = props;
+  const w = width;
+  const h = height;
+  const gx = (px: number) => x + w * px;
+  const gy = (py: number) => y + h * py;
+  /* Proporsjoner inspirert av referanse-grid (~11,5×5 enheter): lang beltebase, kompakt overbygg, høy bom mot høyre, skuffe på bakken */
   return (
     <IconFrame {...props}>
-      <rect x={x + width * 0.08} y={y + height * 0.56} width={width * 0.66} height={height * 0.24} rx={height * 0.08} fill="#1f2937" stroke="#0f172a" strokeWidth={2} />
-      {Array.from({ length: 8 }).map((_, i) => (
+      {/* Bakkeskygge under skuffe */}
+      <ellipse cx={gx(0.93)} cy={gy(0.92)} rx={w * 0.045} ry={h * 0.025} fill="#0f172a22" />
+      {/* Belteunderstell */}
+      <path
+        d={`M ${gx(0.03)} ${gy(0.78)} L ${gx(0.52)} ${gy(0.78)} L ${gx(0.53)} ${gy(0.88)} L ${gx(0.02)} ${gy(0.88)} Z`}
+        fill="#1e293b"
+        stroke="#0f172a"
+        strokeWidth={2}
+      />
+      {/* Beltevulkaniser / hjul */}
+      <circle cx={gx(0.08)} cy={gy(0.83)} r={Math.min(w, h) * 0.045} fill="#334155" stroke="#0f172a" strokeWidth={1.5} />
+      <circle cx={gx(0.48)} cy={gy(0.83)} r={Math.min(w, h) * 0.045} fill="#334155" stroke="#0f172a" strokeWidth={1.5} />
+      {Array.from({ length: 7 }).map((_, i) => (
         <line
           key={i}
-          x1={x + width * 0.11 + i * (width * 0.075)}
-          y1={y + height * 0.585}
-          x2={x + width * 0.11 + i * (width * 0.075)}
-          y2={y + height * 0.78}
-          stroke="#64748b"
-          strokeWidth={1.5}
+          x1={gx(0.12 + i * 0.055)}
+          y1={gy(0.805)}
+          x2={gx(0.12 + i * 0.055)}
+          y2={gy(0.865)}
+          stroke="#475569"
+          strokeWidth={1.2}
         />
       ))}
-      <rect x={x + width * 0.14} y={y + height * 0.19} width={width * 0.4} height={height * 0.34} rx={6} fill="#f59e0b" stroke="#111827" strokeWidth={2} />
-      <rect x={x + width * 0.31} y={y + height * 0.25} width={width * 0.16} height={height * 0.21} fill="#93c5fd" stroke="#1f2937" strokeWidth={1.5} />
-      <rect x={x + width * 0.25} y={y + height * 0.13} width={width * 0.12} height={height * 0.06} rx={4} fill="#f59e0b" stroke="#111827" strokeWidth={2} />
-      <line x1={x + width * 0.54} y1={y + height * 0.27} x2={x + width * 0.84} y2={y + height * 0.1} stroke="#374151" strokeWidth={6} />
-      <line x1={x + width * 0.84} y1={y + height * 0.1} x2={x + width * 0.96} y2={y + height * 0.2} stroke="#374151" strokeWidth={5} />
-      <path d={`M ${x + width * 0.97} ${y + height * 0.2} Q ${x + width * 0.995} ${y + height * 0.26} ${x + width * 0.95} ${y + height * 0.29}`} fill="none" stroke="#374151" strokeWidth={4} />
-      <path d={`M ${x + width * 0.95} ${y + height * 0.29} L ${x + width * 0.985} ${y + height * 0.33} L ${x + width * 0.93} ${y + height * 0.36} Z`} fill="#334155" stroke="#0f172a" strokeWidth={1.5} />
-      <line x1={x + width * 0.13} y1={y + height * 0.26} x2={x + width * 0.41} y2={y + height * 0.26} stroke="#ffffff95" strokeWidth={2} />
+      {/* Overbygg / motorhus */}
+      <path
+        d={`M ${gx(0.08)} ${gy(0.72)} L ${gx(0.38)} ${gy(0.72)} L ${gx(0.4)} ${gy(0.46)} L ${gx(0.1)} ${gy(0.42)} Z`}
+        fill="#f59e0b"
+        stroke="#111827"
+        strokeWidth={2}
+      />
+      <line x1={gx(0.22)} y1={gy(0.5)} x2={gx(0.36)} y2={gy(0.52)} stroke="#111827" strokeWidth={1.5} />
+      <line x1={gx(0.22)} y1={gy(0.56)} x2={gx(0.36)} y2={gy(0.58)} stroke="#111827" strokeWidth={1.5} />
+      <line x1={gx(0.22)} y1={gy(0.62)} x2={gx(0.36)} y2={gy(0.64)} stroke="#111827" strokeWidth={1.5} />
+      {/* Førerhus */}
+      <rect x={gx(0.08)} y={gy(0.48)} width={w * 0.14} height={h * 0.22} rx={3} fill="#f59e0b" stroke="#111827" strokeWidth={2} />
+      <rect x={gx(0.1)} y={gy(0.52)} width={w * 0.09} height={h * 0.08} fill="#bfdbfe" stroke="#1f2937" strokeWidth={1} />
+      <rect x={gx(0.17)} y={gy(0.54)} width={w * 0.03} height={h * 0.06} fill="#93c5fd" stroke="#1f2937" strokeWidth={1} />
+      {/* Svingkrans-skill */}
+      <ellipse cx={gx(0.34)} cy={gy(0.72)} rx={w * 0.06} ry={h * 0.02} fill="#d97706" stroke="#111827" strokeWidth={1.5} />
+      {/* Hovedbom (bøyd) */}
+      <path
+        d={`M ${gx(0.38)} ${gy(0.58)} Q ${gx(0.58)} ${gy(0.18)} ${gx(0.78)} ${gy(0.14)}`}
+        fill="none"
+        stroke="#ca8a04"
+        strokeWidth={9}
+        strokeLinecap="round"
+      />
+      <path
+        d={`M ${gx(0.38)} ${gy(0.58)} Q ${gx(0.58)} ${gy(0.18)} ${gx(0.78)} ${gy(0.14)}`}
+        fill="none"
+        stroke="#111827"
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+      {/* Bom-sylinder */}
+      <line x1={gx(0.42)} y1={gy(0.68)} x2={gx(0.58)} y2={gy(0.35)} stroke="#64748b" strokeWidth={4} strokeLinecap="round" />
+      <circle cx={gx(0.44)} cy={gy(0.64)} r={3} fill="#94a3b8" stroke="#334155" />
+      {/* Stikk / dipper arm */}
+      <line x1={gx(0.78)} y1={gy(0.14)} x2={gx(0.88)} y2={gy(0.62)} stroke="#ca8a04" strokeWidth={8} strokeLinecap="round" />
+      <line x1={gx(0.78)} y1={gy(0.14)} x2={gx(0.88)} y2={gy(0.62)} stroke="#111827" strokeWidth={2} strokeLinecap="round" />
+      <line x1={gx(0.72)} y1={gy(0.28)} x2={gx(0.82)} y2={gy(0.48)} stroke="#64748b" strokeWidth={3} strokeLinecap="round" />
+      {/* Skuffe */}
+      <path
+        d={`M ${gx(0.85)} ${gy(0.62)} L ${gx(0.98)} ${gy(0.66)} L ${gx(0.96)} ${gy(0.88)} L ${gx(0.82)} ${gy(0.86)} Z`}
+        fill="#334155"
+        stroke="#0f172a"
+        strokeWidth={2}
+      />
+      <path d={`M ${gx(0.88)} ${gy(0.86)} L ${gx(0.94)} ${gy(0.88)} M ${gx(0.9)} ${gy(0.87)} L ${gx(0.96)} ${gy(0.89)}`} stroke="#0f172a" strokeWidth={1.5} />
+      {/* Motortak / eksos */}
+      <rect x={gx(0.28)} y={gy(0.38)} width={w * 0.08} height={h * 0.05} rx={2} fill="#f59e0b" stroke="#111827" strokeWidth={1} />
+      <line x1={gx(0.34)} y1={gy(0.38)} x2={gx(0.34)} y2={gy(0.32)} stroke="#111827" strokeWidth={2} />
+      {/* Lys refleks på motor */}
+      <line x1={gx(0.14)} y1={gy(0.48)} x2={gx(0.28)} y2={gy(0.5)} stroke="#ffffff90" strokeWidth={2} />
     </IconFrame>
   );
 }

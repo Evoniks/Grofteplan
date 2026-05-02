@@ -64,7 +64,7 @@ const presets: Record<ObjectType, Omit<CanvasObjectData, "id" | "x" | "y" | "rot
   // Målestokk: 50 px = 1 m
   trenchCross: { type: "trenchCross", width: 500, height: 200 }, // ca 10 m toppbredde, 4 m dybde
   trenchPlan: { type: "trenchPlan", width: 750, height: 130 }, // 15 m lengde, 2.6 m korridor
-  excavatorSide: { type: "excavatorSide", width: 340, height: 150 }, // ca 6.8 x 3.0 m
+  excavatorSide: { type: "excavatorSide", width: 575, height: 250 }, // 11,5 × 5 m (1 rute = 1 m)
   excavatorTop: { type: "excavatorTop", width: 160, height: 340 }, // ca 3.2 x 6.8 m
   truckTop: { type: "truckTop", width: 520, height: 130 }, // ca 10.4 x 2.6 m
   spoilPile: { type: "spoilPile", width: 260, height: 120 },
@@ -101,7 +101,7 @@ const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2,
 const defaultCrossSectionObjects: CanvasObjectData[] = [
   { id: uid("trench"), ...presets.trenchCross, x: 520, y: 210, rotation: 0, meta: { slopeRatio: 1 } },
   { id: uid("spoil"), ...presets.spoilPile, x: 210, y: 150, rotation: 0 },
-  { id: uid("exc"), ...presets.excavatorSide, x: 1010, y: 120, rotation: 0 },
+  { id: uid("exc"), ...presets.excavatorSide, x: 990, y: 120, rotation: 0 },
   { id: uid("lad"), ...presets.ladder, x: 760, y: 220, rotation: -14 },
   { id: uid("bar"), ...presets.barrier, x: 1370, y: 150, rotation: 0 }
 ];
