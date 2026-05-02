@@ -109,7 +109,12 @@ function paletteLabel(type: ObjectType, tab: TabKey): string {
     if (type === "barrier") return "Sikring";
   }
   if (tab === "plan") {
+    if (type === "trenchPlan") return "Grøft";
+    if (type === "excavatorTop") return "Gravemaskin";
+    if (type === "truckTop") return "Lastebil";
+    if (type === "spoilPileLong") return "Massehaug";
     if (type === "barrier") return "Sikring";
+    if (type === "escapeRoute") return "Rømningsvei";
   }
   return objectLabels[type];
 }
