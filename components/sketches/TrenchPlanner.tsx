@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { CanvasObject, type CanvasObjectData } from "@/components/sketches/planner/CanvasObject";
-import { type ObjectType } from "@/components/sketches/planner/AssetIcons";
+import { EXCAVATOR_SIDE_PNG, type ObjectType } from "@/components/sketches/planner/AssetIcons";
 import { MeasurementLine, type MeasurementView } from "@/components/sketches/planner/MeasurementLine";
 import { ObjectToolbar } from "@/components/sketches/planner/ObjectToolbar";
 import { useCanvasHistory } from "@/components/sketches/planner/useCanvasHistory";
@@ -213,8 +213,9 @@ function resolveMeasurements(state: CanvasState): MeasurementView[] {
     .filter(Boolean) as MeasurementView[];
 }
 
-function buildPrintableSvg(state: CanvasState) {
+function buildPrintableSvg(state: CanvasState, assetOrigin = "") {
   const measurements = resolveMeasurements(state);
+  const excavatorImgSrc = `${assetOrigin}${EXCAVATOR_SIDE_PNG}`;
   const printObject = (o: CanvasObjectData) => {
     switch (o.type) {
       case "trenchCross": {
@@ -236,10 +237,7 @@ function buildPrintableSvg(state: CanvasState) {
                 ${markerLines}`;
       }
       case "excavatorSide":
-        return `<rect x="${o.x + o.width * 0.09}" y="${o.y + o.height * 0.18}" width="${o.width * 0.36}" height="${o.height * 0.38}" fill="#f59e0b" stroke="#111827" stroke-width="2" />
-                <rect x="${o.x + o.width * 0.16}" y="${o.y + o.height * 0.57}" width="${o.width * 0.54}" height="${o.height * 0.2}" fill="#475569" stroke="#111827" stroke-width="2" />
-                <line x1="${o.x + o.width * 0.47}" y1="${o.y + o.height * 0.24}" x2="${o.x + o.width * 0.83}" y2="${o.y + o.height * 0.08}" stroke="#374151" stroke-width="5" />
-                <line x1="${o.x + o.width * 0.13}" y1="${o.y + o.height * 0.26}" x2="${o.x + o.width * 0.41}" y2="${o.y + o.height * 0.26}" stroke="#ffffff95" stroke-width="2" />`;
+        return `<image href="${excavatorImgSrc}" xlink:href="${excavatorImgSrc}" x="${o.x}" y="${o.y}" width="${o.width}" height="${o.height}" preserveAspectRatio="xMidYMid meet" />`;
       case "excavatorTop":
         return `<rect x="${o.x + o.width * 0.04}" y="${o.y + o.height * 0.08}" width="${o.width * 0.2}" height="${o.height * 0.84}" fill="#111827" />
                 <rect x="${o.x + o.width * 0.62}" y="${o.y + o.height * 0.08}" width="${o.width * 0.2}" height="${o.height * 0.84}" fill="#111827" />
@@ -277,13 +275,23 @@ function buildPrintableSvg(state: CanvasState) {
     }
   };
   const objectMarkup = state.objects
-    .map(
-      (o) => `
-      <g transform="rotate(${o.rotation} ${o.x + o.width / 2} ${o.y + o.height / 2})">
+    .map((o) => {
+      const cx = o.x + o.width / 2;
+      const cy = o.y + o.height / 2;
+      if (o.type === "excavatorSide") {
+        const mir = o.meta?.mirrored ? `translate(${2 * cx} 0) scale(-1 1) ` : "";
+        return `
+      <g transform="${mir}rotate(${o.rotation} ${cx} ${cy})">
         ${printObject(o)}
       </g>
-    `
-    )
+    `;
+      }
+      return `
+      <g transform="rotate(${o.rotation} ${cx} ${cy})">
+        ${printObject(o)}
+      </g>
+    `;
+    })
     .join("");
   const measurementMarkup = measurements
     .map(
@@ -300,7 +308,7 @@ function buildPrintableSvg(state: CanvasState) {
   `;
 
   return `
-    <svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" width="100%" style="border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;">
+    <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${VIEW_W} ${VIEW_H}" width="100%" style="border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;">
       ${gridMarkup}
       ${objectMarkup}
       ${measurementMarkup}
@@ -997,9 +1005,9 @@ export function TrenchPlanner() {
       <html><head><title>Grøfteplan eksport</title></head>
       <body style="font-family:Arial,sans-serif;padding:16px;">
         ${render("Tverrprofil")}
-        ${buildPrintableSvg(crossHistory.present)}
+        ${buildPrintableSvg(crossHistory.present, typeof window !== "undefined" ? window.location.origin : "")}
         ${render("Plan (ovenfra)")}
-        ${buildPrintableSvg(planHistory.present)}
+        ${buildPrintableSvg(planHistory.present, typeof window !== "undefined" ? window.location.origin : "")}
         ${render("Plan for arbeidet (§ 21-5)")}
         ${renderPlanField("a) Lengdeprofil", workPlan.lengthProfile)}
         ${renderPlanField("a) Jordarter/installasjoner", workPlan.soilAndInstallations)}

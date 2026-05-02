@@ -18,6 +18,9 @@ export type ObjectType =
   | "pipe"
   | "escapeRoute";
 
+/** Bytt ut denne fila i `public/skisse/` med din eigen PNG (gjerne med gjennomsiktig bakgrunn). */
+export const EXCAVATOR_SIDE_PNG = "/skisse/excavator-side.png";
+
 type IconProps = {
   x: number;
   y: number;
@@ -94,190 +97,16 @@ export function TrenchPlanIcon(props: IconProps) {
 
 export function ExcavatorSideIcon(props: IconProps) {
   const { x, y, width, height } = props;
-  const w = width;
-  const h = height;
-  const gx = (px: number) => x + w * px;
-  const gy = (py: number) => y + h * py;
-  const m = Math.min(w, h);
-  const outline = Math.max(1.5, m * 0.014);
-  const jointR = m * 0.038;
-  /* Sideprofil: venstre=bak (klosett), høgre=fram/bom. Brøkar = andel av ikonboks (matcher skala når 1 rute på canvas = 1 m). */
-  const DECK_LEFT = 0.12; // nedkant motorhus / overbygg (ikkje utanpå belte)
-  const DECK_RIGHT = 0.38;
-  /* Førerhus framme på gult dekk, tydeleg innanfor overbygg (venstre klosett 0,06–0,14), ikkje «hengt» ut mot beltkant */
-  const CAB_LEFT = 0.218;
-  const CAB_RIGHT = 0.328;
-  const CAB_TOP = 0.328;
-  const CAB_FLOOR = 0.716;
-  const SWING_CX = (DECK_LEFT + DECK_RIGHT) / 2 + 0.02; // litt mot fram for bomfeste
-  const SWING_CY = 0.72;
-  /* Fylte ledd-armar, belte, skuffe — proporsjonar ~11,5×5 m i boksen */
   return (
     <IconFrame {...props}>
-      <ellipse cx={gx(0.48)} cy={gy(0.93)} rx={w * 0.42} ry={h * 0.04} fill="#0f172a18" />
-      {/* Belter: ytre ramme + indre skygge + kjettingstreker + drev foran/bak */}
-      <path
-        d={`M ${gx(0.035)} ${gy(0.795)} L ${gx(0.05)} ${gy(0.765)} L ${gx(0.495)} ${gy(0.765)} L ${gx(0.515)} ${gy(0.795)} L ${gx(0.515)} ${gy(0.885)} L ${gx(0.495)} ${gy(0.905)} L ${gx(0.05)} ${gy(0.905)} L ${gx(0.03)} ${gy(0.885)} Z`}
-        fill="#1e293b"
-        stroke="#0f172a"
-        strokeWidth={outline}
-        strokeLinejoin="round"
+      <image
+        href={EXCAVATOR_SIDE_PNG}
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        preserveAspectRatio="xMidYMid meet"
       />
-      <path
-        d={`M ${gx(0.065)} ${gy(0.785)} L ${gx(0.485)} ${gy(0.785)} L ${gx(0.495)} ${gy(0.875)} L ${gx(0.055)} ${gy(0.875)} Z`}
-        fill="#0f172a33"
-      />
-      {Array.from({ length: 9 }).map((_, i) => (
-        <line
-          key={`tread-${i}`}
-          x1={gx(0.07 + i * 0.048)}
-          y1={gy(0.792)}
-          x2={gx(0.07 + i * 0.048)}
-          y2={gy(0.888)}
-          stroke="#334155"
-          strokeWidth={Math.max(1, m * 0.012)}
-        />
-      ))}
-      <circle cx={gx(0.075)} cy={gy(0.835)} r={m * 0.048} fill="#292f3d" stroke="#0f172a" strokeWidth={outline * 0.8} />
-      <circle cx={gx(0.475)} cy={gy(0.835)} r={m * 0.048} fill="#292f3d" stroke="#0f172a" strokeWidth={outline * 0.8} />
-      <circle cx={gx(0.075)} cy={gy(0.835)} r={m * 0.022} fill="#475569" />
-      <circle cx={gx(0.475)} cy={gy(0.835)} r={m * 0.022} fill="#475569" />
-      {/* Motorklosett / mot bak */}
-      <path
-        d={`M ${gx(0.06)} ${gy(0.72)} L ${gx(0.14)} ${gy(0.72)} L ${gx(0.14)} ${gy(0.52)} L ${gx(0.07)} ${gy(0.5)} Z`}
-        fill="#ca8a04"
-        stroke="#111827"
-        strokeWidth={outline}
-        strokeLinejoin="round"
-      />
-      {/* Hovedkropp + motordekk */}
-      <path
-        d={`M ${gx(0.12)} ${gy(0.72)} L ${gx(0.38)} ${gy(0.72)} L ${gx(0.405)} ${gy(0.455)} L ${gx(0.125)} ${gy(0.415)} Z`}
-        fill="#f59e0b"
-        stroke="#111827"
-        strokeWidth={outline}
-        strokeLinejoin="round"
-      />
-      <line x1={gx(0.22)} y1={gy(0.495)} x2={gx(0.36)} y2={gy(0.515)} stroke="#111827" strokeWidth={outline * 0.9} />
-      <line x1={gx(0.22)} y1={gy(0.555)} x2={gx(0.36)} y2={gy(0.575)} stroke="#111827" strokeWidth={outline * 0.9} />
-      <line x1={gx(0.22)} y1={gy(0.615)} x2={gx(0.36)} y2={gy(0.635)} stroke="#111827" strokeWidth={outline * 0.9} />
-      {/* Dekkplate = same breidd som motorhus nedkant (DECK_LEFT–DECK_RIGHT), ikkje ut over belte */}
-      <rect
-        x={gx(DECK_LEFT)}
-        y={gy(0.698)}
-        width={w * (DECK_RIGHT - DECK_LEFT)}
-        height={h * 0.026}
-        rx={h * 0.012}
-        fill="#fbbf24"
-        stroke="#111827"
-        strokeWidth={outline * 0.75}
-      />
-      {/* Svingkrans (midt framfor bak på dekk) */}
-      <ellipse cx={gx(SWING_CX)} cy={gy(SWING_CY)} rx={w * 0.055} ry={h * 0.022} fill="#d97706" stroke="#111827" strokeWidth={outline * 0.85} />
-      {/* Førerhus på framkant av overbygg — innanfor [DECK_LEFT,DECK_RIGHT], venstre for bomfeste */}
-      <path
-        d={`M ${gx(CAB_LEFT)} ${gy(CAB_FLOOR)} L ${gx(CAB_LEFT)} ${gy(CAB_TOP)} L ${gx(CAB_RIGHT)} ${gy(CAB_TOP)} L ${gx(CAB_RIGHT)} ${gy(CAB_FLOOR)} Z`}
-        fill="#eab308"
-        stroke="#111827"
-        strokeWidth={outline}
-        strokeLinejoin="round"
-      />
-      <rect
-        x={gx(CAB_LEFT + 0.015)}
-        y={gy(CAB_TOP + 0.048)}
-        width={w * 0.095}
-        height={h * 0.125}
-        rx={2}
-        fill="#bfdbfe"
-        stroke="#1e3a5f"
-        strokeWidth={outline * 0.6}
-      />
-      <rect
-        x={gx(CAB_RIGHT - 0.042)}
-        y={gy(CAB_TOP + 0.065)}
-        width={w * 0.026}
-        height={h * 0.09}
-        rx={1}
-        fill="#93c5fd"
-        stroke="#1e3a5f"
-        strokeWidth={outline * 0.5}
-      />
-      <line
-        x1={gx(CAB_LEFT + 0.006)}
-        y1={gy(0.712)}
-        x2={gx(CAB_RIGHT - 0.006)}
-        y2={gy(0.712)}
-        stroke="#ca8a04"
-        strokeWidth={outline * 0.5}
-        opacity={0.85}
-      />
-      {/* Bom: tjukk fylt firkantring (ikkje stroke-boge) */}
-      <path
-        d={`M ${gx(0.335)} ${gy(0.695)} L ${gx(0.395)} ${gy(0.655)} L ${gx(0.735)} ${gy(0.095)} L ${gx(0.695)} ${gy(0.125)} Z`}
-        fill="#ca8a04"
-        stroke="#111827"
-        strokeWidth={outline}
-        strokeLinejoin="round"
-      />
-      <path
-        d={`M ${gx(0.345)} ${gy(0.685)} L ${gx(0.385)} ${gy(0.66)} L ${gx(0.715)} ${gy(0.115)} L ${gx(0.705)} ${gy(0.12)} Z`}
-        fill="#fde04755"
-      />
-      {/* Bom-sylinder (stempel + foring) */}
-      <line x1={gx(0.2)} y1={gy(0.665)} x2={gx(0.52)} y2={gy(0.32)} stroke="#1f2937" strokeWidth={m * 0.055} strokeLinecap="round" />
-      <line x1={gx(0.22)} y1={gy(0.64)} x2={gx(0.5)} y2={gy(0.34)} stroke="#94a3b8" strokeWidth={m * 0.028} strokeLinecap="round" />
-      {/* Albue-ledd */}
-      <circle cx={gx(0.715)} cy={gy(0.11)} r={jointR} fill="#57534e" stroke="#111827" strokeWidth={outline} />
-      <circle cx={gx(0.715)} cy={gy(0.11)} r={jointR * 0.45} fill="#a8a29e" />
-      {/* Stikkarm */}
-      <path
-        d={`M ${gx(0.695)} ${gy(0.13)} L ${gx(0.74)} ${gy(0.085)} L ${gx(0.895)} ${gy(0.575)} L ${gx(0.855)} ${gy(0.595)} Z`}
-        fill="#ca8a04"
-        stroke="#111827"
-        strokeWidth={outline}
-        strokeLinejoin="round"
-      />
-      <path
-        d={`M ${gx(0.705)} ${gy(0.125)} L ${gx(0.73)} ${gy(0.095)} L ${gx(0.875)} ${gy(0.565)} L ${gx(0.865)} ${gy(0.57)} Z`}
-        fill="#fde04744"
-      />
-      {/* Stikk-sylinder */}
-      <line x1={gx(0.62)} y1={gy(0.22)} x2={gx(0.78)} y2={gy(0.42)} stroke="#1f2937" strokeWidth={m * 0.042} strokeLinecap="round" />
-      <line x1={gx(0.64)} y1={gy(0.25)} x2={gx(0.76)} y2={gy(0.39)} stroke="#94a3b8" strokeWidth={m * 0.02} strokeLinecap="round" />
-      {/* Skuffe med bunnkurve og tenner */}
-      <path
-        d={`M ${gx(0.84)} ${gy(0.56)} L ${gx(0.975)} ${gy(0.6)} L ${gx(0.955)} ${gy(0.72)} Q ${gx(0.9)} ${gy(0.9)} ${gx(0.815)} ${gy(0.895)} L ${gx(0.795)} ${gy(0.68)} Z`}
-        fill="#374151"
-        stroke="#0f172a"
-        strokeWidth={outline}
-        strokeLinejoin="round"
-      />
-      <path
-        d={`M ${gx(0.825)} ${gy(0.885)} L ${gx(0.865)} ${gy(0.895)} L ${gx(0.905)} ${gy(0.902)} L ${gx(0.935)} ${gy(0.898)}`}
-        fill="none"
-        stroke="#0f172a"
-        strokeWidth={outline * 1.1}
-        strokeLinecap="square"
-      />
-      {[
-        [0.835, 0.888],
-        [0.87, 0.895],
-        [0.905, 0.9],
-        [0.935, 0.896],
-      ].map(([px, py], i) => (
-        <path
-          key={`tooth-${i}`}
-          d={`M ${gx(px)} ${gy(py)} L ${gx(px + 0.012)} ${gy(py + 0.035)} L ${gx(px - 0.01)} ${gy(py + 0.03)} Z`}
-          fill="#1f2937"
-          stroke="#0f172a"
-          strokeWidth={outline * 0.5}
-        />
-      ))}
-      <ellipse cx={gx(0.93)} cy={gy(0.915)} rx={w * 0.035} ry={h * 0.022} fill="#0f172a22" />
-      {/* Eksos */}
-      <rect x={gx(0.275)} y={gy(0.375)} width={w * 0.075} height={h * 0.048} rx={2} fill="#f59e0b" stroke="#111827" strokeWidth={outline * 0.7} />
-      <line x1={gx(0.31)} y1={gy(0.375)} x2={gx(0.31)} y2={gy(0.305)} stroke="#111827" strokeWidth={outline * 1.1} />
-      <line x1={gx(0.14)} y1={gy(0.45)} x2={gx(0.28)} y2={gy(0.465)} stroke="#ffffff85" strokeWidth={outline * 1.2} />
     </IconFrame>
   );
 }
