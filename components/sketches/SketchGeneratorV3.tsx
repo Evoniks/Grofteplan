@@ -454,196 +454,181 @@ export function SketchGeneratorV3() {
     );
 
     return (
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-2xl mx-auto space-y-4">
         <StepIndicator current={5} />
         <h2 className="text-xl font-bold text-slate-900 mb-1">Skissa er klar</h2>
-        <p className="text-sm text-slate-500 mb-4">Tilpass og last ned PDF.</p>
+        <p className="text-sm text-slate-500">Tilpass og last ned PDF.</p>
 
-        <div className="flex flex-col lg:flex-row gap-5 items-start">
-
-          {/* ─── Venstre kolonne: innstillingar ─── */}
-          <div className="w-full lg:w-[400px] flex-shrink-0 space-y-4">
-
-            {/* Prosjektinfo */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
-              <h3 className="font-bold text-slate-800 text-sm">Prosjektinfo</h3>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs font-medium text-slate-600 block mb-1">Prosjektnamn</label>
-                  <input type="text" value={projectName} onChange={e => setProjectName(e.target.value)}
-                    placeholder="t.d. Møllevei VA"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-slate-600 block mb-1">Stad / Adresse</label>
-                  <input type="text" value={location} onChange={e => setLocation(e.target.value)}
-                    placeholder="t.d. Møllevei 14"
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs font-medium text-slate-600 block mb-1">Dato</label>
-                  <input type="text" value={date} onChange={e => setDate(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-600 block mb-1">Notat</label>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)}
-                  placeholder="t.d. spesielle tilhøve, kontaktperson …"
-                  rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none" />
-              </div>
+        {/* Prosjektinfo */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+          <h3 className="font-bold text-slate-800 text-sm">Prosjektinfo</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Prosjektnamn</label>
+              <input type="text" value={projectName} onChange={e => setProjectName(e.target.value)}
+                placeholder="t.d. Møllevei VA"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
             </div>
-
-            {/* Rigg og køyretøy */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
-              <h3 className="font-bold text-slate-800 text-sm">Rigg og køyretøy</h3>
-
-              {/* Gravemaskin */}
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Gravemaskin</p>
-                <div className="flex gap-2">
-                  <ChoiceBtn val="below" current={excavPos} onClick={setExcavPos}>
-                    ↓<br /><span className="text-xs font-normal">Nedanfor</span>
-                  </ChoiceBtn>
-                  <ChoiceBtn val="above" current={excavPos} onClick={setExcavPos}>
-                    ↑<br /><span className="text-xs font-normal">Ovanfor</span>
-                  </ChoiceBtn>
-                  <ChoiceBtn val="both" current={excavPos} onClick={setExcavPos}>
-                    ↕<br /><span className="text-xs font-normal">Begge sider</span>
-                  </ChoiceBtn>
-                  <ChoiceBtn val="ingen" current={excavPos} onClick={setExcavPos}>
-                    —<br /><span className="text-xs font-normal">Ingen</span>
-                  </ChoiceBtn>
-                </div>
-              </div>
-
-              {/* Massehaug */}
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Massehaug</p>
-                <div className="flex gap-2">
-                  <ChoiceBtn val="above" current={masseSide} onClick={setMasseSide}>
-                    ↑<br /><span className="text-xs font-normal">Ovanfor</span>
-                  </ChoiceBtn>
-                  <ChoiceBtn val="below" current={masseSide} onClick={setMasseSide}>
-                    ↓<br /><span className="text-xs font-normal">Nedanfor</span>
-                  </ChoiceBtn>
-                  <ChoiceBtn val="both" current={masseSide} onClick={setMasseSide}>
-                    ↕<br /><span className="text-xs font-normal">Begge sider</span>
-                  </ChoiceBtn>
-                  <ChoiceBtn val="ingen" current={masseSide} onClick={setMasseSide}>
-                    —<br /><span className="text-xs font-normal">Ingen</span>
-                  </ChoiceBtn>
-                </div>
-              </div>
-
-              {/* Lastebil nedanfor grøft */}
-              {(excavPos === "below" || excavPos === "both") && (
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                    Lastebil{excavPos === "both" ? " — nedanfor grøft" : ""}
-                  </p>
-                  <TruckButtons dir={truckDirBelow} setDir={setTruckDirBelow} />
-                </div>
-              )}
-
-              {/* Lastebil ovanfor grøft */}
-              {(excavPos === "above" || excavPos === "both") && (
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                    Lastebil{excavPos === "both" ? " — ovanfor grøft" : ""}
-                  </p>
-                  <TruckButtons dir={truckDirAbove} setDir={setTruckDirAbove} />
-                </div>
-              )}
-
-              {/* Avstand */}
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                  Avstand frå grøftkant
-                </p>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => { setExcavDistM(m => Math.max(0.5, Math.round((m - 0.5) * 10) / 10)); setMassehaugDistM(m => Math.max(0.5, Math.round((m - 0.5) * 10) / 10)); }}
-                    className="w-10 h-10 rounded-xl border-2 border-slate-200 text-slate-700 hover:bg-slate-100 text-xl font-bold flex items-center justify-center"
-                  >−</button>
-                  <span className="text-2xl font-bold text-brand-700 w-16 text-center">{excavDistM.toFixed(1)} m</span>
-                  <button
-                    onClick={() => { setExcavDistM(m => Math.min(5.0, Math.round((m + 0.5) * 10) / 10)); setMassehaugDistM(m => Math.min(5.0, Math.round((m + 0.5) * 10) / 10)); }}
-                    className="w-10 h-10 rounded-xl border-2 border-slate-200 text-slate-700 hover:bg-slate-100 text-xl font-bold flex items-center justify-center"
-                  >+</button>
-                  {excavDistM < 1.0 && (
-                    <span className="text-xs text-amber-600">⚠️ Under min. 1 m</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Tverrsnitt-val */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4">
-              <h3 className="font-bold text-slate-800 text-sm mb-3">Tverrsnitt — gravemaskin</h3>
-              <div className="flex gap-2">
-                <ChoiceBtn val="right" current={crossSecPos} onClick={setCrossSecPos}>
-                  □→<br /><span className="text-xs font-normal">Til høgre</span>
-                </ChoiceBtn>
-                <ChoiceBtn val="front" current={crossSecPos} onClick={setCrossSecPos}>
-                  ↓□↓<br /><span className="text-xs font-normal">Foran (frontvisning)</span>
-                </ChoiceBtn>
-              </div>
-            </div>
-
-            {/* Åtvaringar */}
-            {recommendation && recommendation.warnings.length > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                <div className="text-xs font-semibold text-amber-700 uppercase mb-2">
-                  Krav etter norsk regelverk (§21 Gravearbeid)
-                </div>
-                <ul className="space-y-1">
-                  {recommendation.warnings.map((w, i) => (
-                    <li key={i} className="text-xs text-amber-800 flex gap-2">
-                      <span>⚠️</span><span>{w}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Handlingar */}
-            <div className="flex gap-3">
-              <button onClick={() => setStep(4)}
-                className="px-4 py-3 border border-slate-200 text-slate-600 rounded-xl text-sm hover:border-slate-300 transition-colors">
-                ← Endre
-              </button>
-              <button onClick={handlePrint}
-                className="flex-1 px-6 py-3 bg-brand-600 text-white rounded-xl text-base font-semibold hover:bg-brand-700 transition-colors">
-                🖨️ Skriv ut / PDF
-              </button>
-            </div>
-            <p className="text-xs text-slate-400 text-center">
-              I utskriftsdialogen: vel «Lagre som PDF» for å laste ned.
-            </p>
-          </div>
-
-          {/* ─── Høgre kolonne: skisser (sticky) ─── */}
-          <div className="flex-1 min-w-0 lg:sticky lg:top-4 space-y-4">
-            <div ref={svgRef} id="sketch-print-area"
-              className="bg-white border border-slate-200 rounded-2xl p-3">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tverrsnitt</p>
-              <div className="border border-slate-200 rounded-xl overflow-x-auto bg-white">
-                <TrenchSketchV3 params={params} />
-              </div>
-            </div>
-            <div id="plan-print-area"
-              className="bg-white border border-slate-200 rounded-2xl p-3">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Plan (ovanfrå)</p>
-              <div className="border border-slate-200 rounded-xl overflow-x-auto bg-white">
-                <PlanSketchV3 params={params} />
-              </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Stad / Adresse</label>
+              <input type="text" value={location} onChange={e => setLocation(e.target.value)}
+                placeholder="t.d. Møllevei 14"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
             </div>
           </div>
-
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Dato</label>
+              <input type="text" value={date} onChange={e => setDate(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Notat</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)}
+              placeholder="t.d. spesielle tilhøve, kontaktperson …"
+              rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none" />
+          </div>
         </div>
+
+        {/* Tverrsnitt-innstillingar → tverrsnitt-skisse */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4">
+          <h3 className="font-bold text-slate-800 text-sm mb-3">Tverrsnitt — gravemaskin</h3>
+          <div className="flex gap-2">
+            <ChoiceBtn val="right" current={crossSecPos} onClick={setCrossSecPos}>
+              □→<br /><span className="text-xs font-normal">Til høgre</span>
+            </ChoiceBtn>
+            <ChoiceBtn val="front" current={crossSecPos} onClick={setCrossSecPos}>
+              ↓□↓<br /><span className="text-xs font-normal">Foran (frontvisning)</span>
+            </ChoiceBtn>
+          </div>
+        </div>
+
+        <div ref={svgRef} id="sketch-print-area"
+          className="bg-white border border-slate-200 rounded-2xl p-3">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tverrsnitt</p>
+          <div className="border border-slate-200 rounded-xl overflow-x-auto bg-white">
+            <TrenchSketchV3 params={params} />
+          </div>
+        </div>
+
+        {/* Rigg og køyretøy → planskisse */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
+          <h3 className="font-bold text-slate-800 text-sm">Rigg og køyretøy</h3>
+
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Gravemaskin</p>
+            <div className="flex gap-2">
+              <ChoiceBtn val="below" current={excavPos} onClick={setExcavPos}>
+                ↓<br /><span className="text-xs font-normal">Nedanfor</span>
+              </ChoiceBtn>
+              <ChoiceBtn val="above" current={excavPos} onClick={setExcavPos}>
+                ↑<br /><span className="text-xs font-normal">Ovanfor</span>
+              </ChoiceBtn>
+              <ChoiceBtn val="both" current={excavPos} onClick={setExcavPos}>
+                ↕<br /><span className="text-xs font-normal">Begge sider</span>
+              </ChoiceBtn>
+              <ChoiceBtn val="ingen" current={excavPos} onClick={setExcavPos}>
+                —<br /><span className="text-xs font-normal">Ingen</span>
+              </ChoiceBtn>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Massehaug</p>
+            <div className="flex gap-2">
+              <ChoiceBtn val="above" current={masseSide} onClick={setMasseSide}>
+                ↑<br /><span className="text-xs font-normal">Ovanfor</span>
+              </ChoiceBtn>
+              <ChoiceBtn val="below" current={masseSide} onClick={setMasseSide}>
+                ↓<br /><span className="text-xs font-normal">Nedanfor</span>
+              </ChoiceBtn>
+              <ChoiceBtn val="both" current={masseSide} onClick={setMasseSide}>
+                ↕<br /><span className="text-xs font-normal">Begge sider</span>
+              </ChoiceBtn>
+              <ChoiceBtn val="ingen" current={masseSide} onClick={setMasseSide}>
+                —<br /><span className="text-xs font-normal">Ingen</span>
+              </ChoiceBtn>
+            </div>
+          </div>
+
+          {(excavPos === "below" || excavPos === "both") && (
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                Lastebil{excavPos === "both" ? " — nedanfor grøft" : ""}
+              </p>
+              <TruckButtons dir={truckDirBelow} setDir={setTruckDirBelow} />
+            </div>
+          )}
+
+          {(excavPos === "above" || excavPos === "both") && (
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                Lastebil{excavPos === "both" ? " — ovanfor grøft" : ""}
+              </p>
+              <TruckButtons dir={truckDirAbove} setDir={setTruckDirAbove} />
+            </div>
+          )}
+
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              Avstand frå grøftkant
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { setExcavDistM(m => Math.max(0.5, Math.round((m - 0.5) * 10) / 10)); setMassehaugDistM(m => Math.max(0.5, Math.round((m - 0.5) * 10) / 10)); }}
+                className="w-10 h-10 rounded-xl border-2 border-slate-200 text-slate-700 hover:bg-slate-100 text-xl font-bold flex items-center justify-center"
+              >−</button>
+              <span className="text-2xl font-bold text-brand-700 w-16 text-center">{excavDistM.toFixed(1)} m</span>
+              <button
+                onClick={() => { setExcavDistM(m => Math.min(5.0, Math.round((m + 0.5) * 10) / 10)); setMassehaugDistM(m => Math.min(5.0, Math.round((m + 0.5) * 10) / 10)); }}
+                className="w-10 h-10 rounded-xl border-2 border-slate-200 text-slate-700 hover:bg-slate-100 text-xl font-bold flex items-center justify-center"
+              >+</button>
+              {excavDistM < 1.0 && (
+                <span className="text-xs text-amber-600">⚠️ Under min. 1 m</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div id="plan-print-area"
+          className="bg-white border border-slate-200 rounded-2xl p-3">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Plan (ovanfrå)</p>
+          <div className="border border-slate-200 rounded-xl overflow-x-auto bg-white">
+            <PlanSketchV3 params={params} />
+          </div>
+        </div>
+
+        {/* Åtvaringar */}
+        {recommendation && recommendation.warnings.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <div className="text-xs font-semibold text-amber-700 uppercase mb-2">
+              Krav etter norsk regelverk (§21 Gravearbeid)
+            </div>
+            <ul className="space-y-1">
+              {recommendation.warnings.map((w, i) => (
+                <li key={i} className="text-xs text-amber-800 flex gap-2">
+                  <span>⚠️</span><span>{w}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Handlingar */}
+        <div className="flex gap-3">
+          <button onClick={() => setStep(4)}
+            className="px-4 py-3 border border-slate-200 text-slate-600 rounded-xl text-sm hover:border-slate-300 transition-colors">
+            ← Endre
+          </button>
+          <button onClick={handlePrint}
+            className="flex-1 px-6 py-3 bg-brand-600 text-white rounded-xl text-base font-semibold hover:bg-brand-700 transition-colors">
+            🖨️ Skriv ut / PDF
+          </button>
+        </div>
+        <p className="text-xs text-slate-400 text-center">
+          I utskriftsdialogen: vel «Lagre som PDF» for å laste ned.
+        </p>
       </div>
     );
   }
