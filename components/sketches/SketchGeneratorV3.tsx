@@ -100,6 +100,27 @@ function NavButtons({
   );
 }
 
+type ExcavPos    = "below" | "above" | "both" | "ingen";
+type TruckDir    = "ingen" | "left" | "right" | "straight";
+type MasseSide   = "above" | "below" | "both" | "ingen";
+type CrossSecPos = "right" | "front";
+
+function makeExcavConfig(
+  enabled: boolean,
+  isAbove: boolean,
+  truckDir: TruckDir,
+): ExcavSideConfig {
+  const truckFromLeft  = truckDir === "left";
+  const truckFromRight = truckDir === "right";
+  const truckStraight  = truckDir === "straight";
+  const rotation: 0 | 90 | 180 | 270 =
+    truckDir === "left"     ? 180 :
+    truckDir === "right"    ? 0   :
+    truckDir === "straight" ? (isAbove ? 270 : 90) :
+    (isAbove ? 90 : 270); // ingen lastebil → arm mot grøfta
+  return { enabled, pos: "center", rotation, truckFromLeft, truckFromRight, truckStraight };
+}
+
 export function SketchGeneratorV3() {
   const [step, setStep] = useState<Step>(1);
   const [workType, setWorkType] = useState<WorkType | null>(null);
@@ -108,16 +129,19 @@ export function SketchGeneratorV3() {
   const [groundType, setGroundType] = useState<GroundType | null>(null);
   const [securingMethod, setSecuringMethod] = useState<SecuringMethod | null>(null);
   const [trenchLengthM, setTrenchLengthM] = useState(20);
-  const [showMassehaug, setShowMassehaug] = useState(true);
-  const [excavBelow, setExcavBelow] = useState<ExcavSideConfig>({ ...defaultExcavConfig(true),  rotation: 0, truckFromRight: true });
-  const [excavAbove, setExcavAbove] = useState<ExcavSideConfig>({ ...defaultExcavConfig(false), rotation: 180 });
   const [massehaugDistM, setMassehaugDistM] = useState(1.0);
   const [excavDistM, setExcavDistM] = useState(1.0);
-  const [excavFacingFront, setExcavFacingFront] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [location, setLocation] = useState("");
   const [date, setDate] = useState(() => new Date().toLocaleDateString("nb-NO"));
   const [notes, setNotes] = useState("");
+
+  // Enkle val for Ola og Kari
+  const [excavPos,    setExcavPos]    = useState<ExcavPos>("below");
+  const [truckDir,    setTruckDir]    = useState<TruckDir>("right");
+  const [masseSide,   setMasseSide]   = useState<MasseSide>("above");
+  const [crossSecPos, setCrossSecPos] = useState<CrossSecPos>("right");
+
   const svgRef = useRef<HTMLDivElement>(null);
 
   const recommendation =
@@ -125,19 +149,28 @@ export function SketchGeneratorV3() {
 
   const activeMethod = securingMethod ?? recommendation?.method ?? "skraa_45";
 
+  const excavBelow = makeExcavConfig(
+    excavPos === "below" || excavPos === "both", false, truckDir
+  );
+  const excavAbove = makeExcavConfig(
+    excavPos === "above" || excavPos === "both", true, truckDir
+  );
+
   const params: SketchV3Params = {
     workType: workType ?? "va",
     depthM,
     bottomWidthM,
     trenchLengthM,
-    showMassehaug,
+    showMassehaug:   masseSide === "above" || masseSide === "both",
+    massehaugBelow:  masseSide === "below" || masseSide === "both",
     excavBelow,
     excavAbove,
     groundType: groundType ?? "morene",
     securingMethod: activeMethod,
     massehaugDistM,
     excavDistM,
-    excavFacingFront,
+    excavFacingFront: crossSecPos === "front",
+    excavSideLeft:    false,
     projectName,
     location,
     date,
@@ -384,272 +417,200 @@ export function SketchGeneratorV3() {
 
   // ─── Step 5: Preview ──────────────────────────────────────────────────────
   if (step === 5) {
+
+    // Hjelpefunksjon for store valsknapper
+    function ChoiceBtn<T extends string>({ val, current, onClick, children }: {
+      val: T; current: T; onClick: (v: T) => void; children: React.ReactNode;
+    }) {
+      const active = val === current;
+      return (
+        <button
+          type="button"
+          onClick={() => onClick(val)}
+          className={`flex-1 py-3 px-2 rounded-xl border-2 text-sm font-semibold text-center transition-all
+            ${active
+              ? "border-brand-600 bg-brand-600 text-white shadow"
+              : "border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50"}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
     return (
       <div className="max-w-3xl mx-auto">
         <StepIndicator current={5} />
         <h2 className="text-xl font-bold text-slate-900 mb-2">Skissa er klar</h2>
         <p className="text-sm text-slate-500 mb-4">Fyll inn prosjektinformasjon og last ned PDF.</p>
 
-        {/* Project info */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        {/* Prosjektinfo */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <div>
-            <label className="text-xs font-medium text-slate-600 block mb-1">Prosjektnamn</label>
-            <input
-              type="text"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
+            <label className="text-sm font-medium text-slate-700 block mb-1">Prosjektnamn</label>
+            <input type="text" value={projectName} onChange={e => setProjectName(e.target.value)}
               placeholder="t.d. Nedre Møllevei VA"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-            />
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600 block mb-1">Stad / Adresse</label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
+            <label className="text-sm font-medium text-slate-700 block mb-1">Stad / Adresse</label>
+            <input type="text" value={location} onChange={e => setLocation(e.target.value)}
               placeholder="t.d. Nedre Møllevei 14"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-            />
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600 block mb-1">Dato</label>
-            <input
-              type="text"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-            />
+            <label className="text-sm font-medium text-slate-700 block mb-1">Dato</label>
+            <input type="text" value={date} onChange={e => setDate(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" />
           </div>
         </div>
-
-        {/* Notat / tilleggsinformasjon */}
-        <div className="mb-4">
-          <label className="text-xs font-medium text-slate-600 block mb-1">Notat / tilleggsinformasjon</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="t.d. spesielle tilhøve, tiltak, kontaktperson …"
-            rows={2}
-            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none"
-          />
+        <div className="mb-5">
+          <label className="text-sm font-medium text-slate-700 block mb-1">Notat</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)}
+            placeholder="t.d. spesielle tilhøve, kontaktperson …"
+            rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none" />
         </div>
 
-        {/* Avstandar frå grøftkant */}
-        <div className="mb-4 bg-white border border-slate-200 rounded-xl p-4">
-          <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Avstand frå grøftkant</p>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">
-                Massehaug (venstre)
-              </label>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setMassehaugDistM(m => Math.max(0.5, Math.round((m - 0.5) * 10) / 10))}
-                  className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-lg font-bold flex items-center justify-center"
-                >−</button>
-                <input
-                  type="number"
-                  min={0.5} max={5.0} step={0.5}
-                  value={massehaugDistM}
-                  onChange={(e) => setMassehaugDistM(Math.max(0.5, parseFloat(e.target.value) || 1))}
-                  className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-center text-sm font-bold text-brand-700"
-                />
-                <button
-                  onClick={() => setMassehaugDistM(m => Math.min(5.0, Math.round((m + 0.5) * 10) / 10))}
-                  className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-lg font-bold flex items-center justify-center"
-                >+</button>
-                <span className="text-sm text-slate-500">m</span>
-              </div>
-              {massehaugDistM < 1.0 && (
-                <p className="text-xs text-amber-600 mt-1">⚠️ Under tilrådd min. 1 m</p>
-              )}
+        {/* ═══ RIGG OG KØYRETØY ═══ */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-5 space-y-5">
+          <h3 className="font-bold text-slate-800 text-base">Rigg og køyretøy</h3>
+
+          {/* Gravemaskin plassering */}
+          <div>
+            <p className="text-sm font-semibold text-slate-600 mb-2">Gravemaskin</p>
+            <div className="flex gap-2">
+              <ChoiceBtn val="below" current={excavPos} onClick={setExcavPos}>
+                ↓<br /><span className="text-xs font-normal">Nedanfor</span>
+              </ChoiceBtn>
+              <ChoiceBtn val="above" current={excavPos} onClick={setExcavPos}>
+                ↑<br /><span className="text-xs font-normal">Ovanfor</span>
+              </ChoiceBtn>
+              <ChoiceBtn val="both" current={excavPos} onClick={setExcavPos}>
+                ↕<br /><span className="text-xs font-normal">Begge sider</span>
+              </ChoiceBtn>
+              <ChoiceBtn val="ingen" current={excavPos} onClick={setExcavPos}>
+                —<br /><span className="text-xs font-normal">Ingen</span>
+              </ChoiceBtn>
             </div>
+          </div>
+
+          {/* Masser */}
+          <div>
+            <p className="text-sm font-semibold text-slate-600 mb-2">Massehaug</p>
+            <div className="flex gap-2">
+              <ChoiceBtn val="above" current={masseSide} onClick={setMasseSide}>
+                ↑<br /><span className="text-xs font-normal">Ovanfor</span>
+              </ChoiceBtn>
+              <ChoiceBtn val="below" current={masseSide} onClick={setMasseSide}>
+                ↓<br /><span className="text-xs font-normal">Nedanfor</span>
+              </ChoiceBtn>
+              <ChoiceBtn val="both" current={masseSide} onClick={setMasseSide}>
+                ↕<br /><span className="text-xs font-normal">Begge sider</span>
+              </ChoiceBtn>
+              <ChoiceBtn val="ingen" current={masseSide} onClick={setMasseSide}>
+                —<br /><span className="text-xs font-normal">Ingen</span>
+              </ChoiceBtn>
+            </div>
+            {masseSide === "ingen" && (
+              <p className="text-xs text-slate-500 mt-1">Masser lastar direkte på lastebil eller vert brukt oppigjen.</p>
+            )}
+          </div>
+
+          {/* Lastebil */}
+          {excavPos !== "ingen" && (
             <div>
-              <label className="text-xs font-medium text-slate-600 block mb-1">
-                Gravemaskin (høgre)
-              </label>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setExcavDistM(m => Math.max(0.5, Math.round((m - 0.5) * 10) / 10))}
-                  className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-lg font-bold flex items-center justify-center"
-                >−</button>
-                <input
-                  type="number"
-                  min={0.5} max={5.0} step={0.5}
-                  value={excavDistM}
-                  onChange={(e) => setExcavDistM(Math.max(0.5, parseFloat(e.target.value) || 1))}
-                  className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-center text-sm font-bold text-brand-700"
-                />
-                <button
-                  onClick={() => setExcavDistM(m => Math.min(5.0, Math.round((m + 0.5) * 10) / 10))}
-                  className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-lg font-bold flex items-center justify-center"
-                >+</button>
-                <span className="text-sm text-slate-500">m</span>
+              <p className="text-sm font-semibold text-slate-600 mb-2">Lastebil</p>
+              <div className="flex gap-2">
+                <ChoiceBtn val="ingen" current={truckDir} onClick={setTruckDir}>
+                  —<br /><span className="text-xs font-normal">Ingen</span>
+                </ChoiceBtn>
+                <ChoiceBtn val="left" current={truckDir} onClick={setTruckDir}>
+                  ←<br /><span className="text-xs font-normal">Frå venstre</span>
+                </ChoiceBtn>
+                <ChoiceBtn val="right" current={truckDir} onClick={setTruckDir}>
+                  →<br /><span className="text-xs font-normal">Frå høgre</span>
+                </ChoiceBtn>
+                <ChoiceBtn val="straight" current={truckDir} onClick={setTruckDir}>
+                  ↕<br /><span className="text-xs font-normal">Rett inn</span>
+                </ChoiceBtn>
               </div>
+            </div>
+          )}
+
+          {/* Avstand frå grøftkant */}
+          <div>
+            <p className="text-sm font-semibold text-slate-600 mb-2">
+              Avstand frå grøftkant
+              <span className="font-normal text-slate-400 ml-1">(gravemaskin og massehaug)</span>
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { setExcavDistM(m => Math.max(0.5, Math.round((m - 0.5) * 10) / 10)); setMassehaugDistM(m => Math.max(0.5, Math.round((m - 0.5) * 10) / 10)); }}
+                className="w-10 h-10 rounded-xl border-2 border-slate-200 text-slate-700 hover:bg-slate-100 text-xl font-bold flex items-center justify-center"
+              >−</button>
+              <span className="text-2xl font-bold text-brand-700 w-16 text-center">{excavDistM.toFixed(1)} m</span>
+              <button
+                onClick={() => { setExcavDistM(m => Math.min(5.0, Math.round((m + 0.5) * 10) / 10)); setMassehaugDistM(m => Math.min(5.0, Math.round((m + 0.5) * 10) / 10)); }}
+                className="w-10 h-10 rounded-xl border-2 border-slate-200 text-slate-700 hover:bg-slate-100 text-xl font-bold flex items-center justify-center"
+              >+</button>
               {excavDistM < 1.0 && (
-                <p className="text-xs text-amber-600 mt-1">⚠️ Under tilrådd min. 1 m</p>
+                <span className="text-xs text-amber-600">⚠️ Under tilrådd min. 1 m</span>
               )}
             </div>
           </div>
         </div>
 
-        {/* Tverrsnittsskisse */}
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-xs font-semibold text-slate-500 uppercase">Tverrsnitt</p>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setExcavFacingFront(false)}
-              className={`px-3 py-1 rounded-l-lg border text-xs font-medium transition-colors
-                ${!excavFacingFront ? "bg-brand-600 text-white border-brand-600" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}
-            >
-              Sidevisning
-            </button>
-            <button
-              onClick={() => setExcavFacingFront(true)}
-              className={`px-3 py-1 rounded-r-lg border text-xs font-medium transition-colors
-                ${excavFacingFront ? "bg-brand-600 text-white border-brand-600" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}
-            >
-              Frontvisning
-            </button>
+        {/* ═══ TVERRSNITT ═══ */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4">
+          <h3 className="font-bold text-slate-800 text-base mb-3">Tverrsnitt — gravemaskin</h3>
+          <div className="flex gap-2 mb-4">
+            <ChoiceBtn val="right" current={crossSecPos} onClick={setCrossSecPos}>
+              □→<br /><span className="text-xs font-normal">Gravemaskin til høgre</span>
+            </ChoiceBtn>
+            <ChoiceBtn val="front" current={crossSecPos} onClick={setCrossSecPos}>
+              ↓□↓<br /><span className="text-xs font-normal">Gravemaskin foran (frontvisning)</span>
+            </ChoiceBtn>
           </div>
-        </div>
-        <div
-          ref={svgRef}
-          id="sketch-print-area"
-          className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mb-4"
-        >
-          <TrenchSketchV3 params={params} />
-        </div>
-
-        {/* Planskisse — oppsett */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4 mb-3">
-          <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Planskisse — oppsett</p>
-          {/* Massehaug */}
-          <div className="mb-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={showMassehaug} onChange={e => setShowMassehaug(e.target.checked)}
-                className="accent-brand-600 w-4 h-4" />
-              <span className="text-sm text-slate-700">Vis massehaug</span>
-            </label>
-          </div>
-          {/* To kolonnar: Nedanfor og Ovanfor */}
-          <div className="grid grid-cols-2 gap-3">
-            {(["below", "above"] as const).map(side => {
-              const cfg  = side === "below" ? excavBelow : excavAbove;
-              const set  = (patch: Partial<ExcavSideConfig>) =>
-                side === "below" ? setExcavBelow(c => ({ ...c, ...patch }))
-                                 : setExcavAbove(c => ({ ...c, ...patch }));
-              const label = side === "below" ? "▼ Nedanfor grøft" : "▲ Ovanfor grøft";
-              return (
-                <div key={side} className={`border rounded-xl p-3 ${cfg.enabled ? "border-brand-300 bg-brand-50/30" : "border-slate-200 bg-slate-50/50"}`}>
-                  <label className="flex items-center gap-2 cursor-pointer mb-3">
-                    <input type="checkbox" checked={cfg.enabled}
-                      onChange={e => set({ enabled: e.target.checked })}
-                      className="accent-brand-600 w-4 h-4" />
-                    <span className="text-xs font-semibold text-slate-700">{label}</span>
-                  </label>
-                  {cfg.enabled && (
-                    <div className="space-y-2">
-                      {/* Posisjon langs grøfta */}
-                      <div>
-                        <p className="text-xs text-slate-500 mb-1">Posisjon</p>
-                        <div className="flex gap-1">
-                          {(["left","center","right"] as const).map(v => (
-                            <button key={v} onClick={() => set({ pos: v })}
-                              className={`flex-1 py-0.5 rounded border text-xs transition-colors
-                                ${cfg.pos === v ? "bg-brand-600 text-white border-brand-600" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}>
-                              {v === "left" ? "←" : v === "center" ? "Midt" : "→"}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {/* Arm-retning */}
-                      <div>
-                        <p className="text-xs text-slate-500 mb-1">Arm-retning</p>
-                        <div className="flex gap-1">
-                          {([
-                            { val: 270 as const, label: "↑" },
-                            { val:   0 as const, label: "→" },
-                            { val:  90 as const, label: "↓" },
-                            { val: 180 as const, label: "←" },
-                          ]).map(({ val, label: lbl }) => (
-                            <button key={val} onClick={() => set({ rotation: val })}
-                              className={`flex-1 py-0.5 rounded border text-xs transition-colors
-                                ${cfg.rotation === val ? "bg-brand-600 text-white border-brand-600" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}>
-                              {lbl}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {/* Lastebil */}
-                      <div>
-                        <p className="text-xs text-slate-500 mb-1">Lastebil</p>
-                        <div className="flex gap-3">
-                          <label className="flex items-center gap-1 cursor-pointer">
-                            <input type="checkbox" checked={cfg.truckFromLeft}
-                              onChange={e => set({ truckFromLeft: e.target.checked })}
-                              className="accent-brand-600 w-3.5 h-3.5" />
-                            <span className="text-xs text-slate-700">← Venstre</span>
-                          </label>
-                          <label className="flex items-center gap-1 cursor-pointer">
-                            <input type="checkbox" checked={cfg.truckFromRight}
-                              onChange={e => set({ truckFromRight: e.target.checked })}
-                              className="accent-brand-600 w-3.5 h-3.5" />
-                            <span className="text-xs text-slate-700">Høgre →</span>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <div ref={svgRef} id="sketch-print-area"
+            className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+            <TrenchSketchV3 params={params} />
           </div>
         </div>
 
-        {/* Planskisse */}
-        <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Plan (ovanfrå)</p>
-        <div
-          id="plan-print-area"
-          className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm"
-        >
-          <PlanSketchV3 params={params} />
+        {/* ═══ PLANSKISSE ═══ */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 mb-4">
+          <h3 className="font-bold text-slate-800 text-base mb-3">Plan (ovanfrå)</h3>
+          <div id="plan-print-area" className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+            <PlanSketchV3 params={params} />
+          </div>
         </div>
 
-        {/* Warnings summary */}
+        {/* Åtvaringar */}
         {recommendation && recommendation.warnings.length > 0 && (
-          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
             <div className="text-xs font-semibold text-amber-700 uppercase mb-2">
               Krav etter norsk regelverk (§21 Gravearbeid)
             </div>
             <ul className="space-y-1">
               {recommendation.warnings.map((w, i) => (
                 <li key={i} className="text-xs text-amber-800 flex gap-2">
-                  <span>⚠️</span>
-                  <span>{w}</span>
+                  <span>⚠️</span><span>{w}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex gap-3 mt-5">
-          <button
-            onClick={() => setStep(4)}
-            className="px-4 py-2.5 border border-slate-200 text-slate-600 rounded-lg text-sm hover:border-slate-300 transition-colors"
-          >
+        {/* Handlingar */}
+        <div className="flex gap-3 mt-2">
+          <button onClick={() => setStep(4)}
+            className="px-4 py-3 border border-slate-200 text-slate-600 rounded-xl text-sm hover:border-slate-300 transition-colors">
             ← Endre
           </button>
-          <button
-            onClick={handlePrint}
-            className="flex-1 px-6 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
-          >
+          <button onClick={handlePrint}
+            className="flex-1 px-6 py-3 bg-brand-600 text-white rounded-xl text-base font-semibold hover:bg-brand-700 transition-colors">
             🖨️ Skriv ut / Lagre som PDF
           </button>
         </div>
-
         <p className="text-xs text-slate-400 mt-2 text-center">
           I utskriftsdialogen: vel «Lagre som PDF» for å laste ned.
         </p>

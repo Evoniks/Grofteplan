@@ -15,57 +15,30 @@ const EXCAVATOR_TOP_PNG = "/skisse/excavator-top.png";
 const TRUCK_TOP_PNG     = "/skisse/truck-top.png";
 const PNG_ASPECT        = 1329 / 750; // ≈ 1.772
 
-// SVG-filter: gjer kvit/lys bakgrunn gjennomsiktig (same som AssetIcons.tsx)
-const KNOCKOUT_VALUES = "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  -1 -1 -1 0 2.88";
-const ALPHA_BOOST     = 2.35;
+// Knockout-filter: fjernar SVART bakgrunn frå plan-PNG (excavator-top, truck-top har svart bakgrunn).
+// A' = 2*R + 2*G + 2*B → svart (0,0,0)→0 (gjennomsiktig), farga piksel→≥1 (ugjennomsiktig).
+const KNOCKOUT_VALUES = "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  2 2 2 0 0";
+const ALPHA_BOOST = 1.5;
 
-// Pivotpunkt for gravemaskin: belte/understell-senter inni PNG-en.
-// PNG default: arm peikar HØGRE. Understell er i venstre del av biletet.
-// bodyFracX=0.22 → understellsenter er 22% inn frå venstre kant av PNG.
-// bodyFracY=0.50 → understellsenter er vertikalt midt i PNG.
 const EXCAV_BODY_FRAC_X = 0.22;
 const EXCAV_BODY_FRAC_Y = 0.50;
-
-// Arm-rekkevidde frå understell-senter til armspiss (76% av PNG-breidde)
 const EXCAV_ARM_REACH_FRAC = 0.76;
 
-// Lastebil: dump-senter (lasteplan) er 15% av truckW inn frå VENSTRE av truck-PNG (rotation=0)
-// Ved rotation=180: dump-senter er 15% frå høgre = 85% frå venstre
+// Dump-senter på lastebil: 15 % frå venstre kant av original PNG
 const TRUCK_DUMP_FRAC = 0.15;
-
-function VehicleDefs({ fid, mid, href, bx, by, W, H }: {
-  fid: string; mid: string; href: string;
-  bx: number; by: number; W: number; H: number;
-}) {
-  return (
-    <>
-      <filter id={fid} x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
-        <feColorMatrix in="SourceGraphic" type="matrix" values={KNOCKOUT_VALUES} result="k" />
-        <feComponentTransfer in="k" colorInterpolationFilters="sRGB">
-          <feFuncA type="linear" slope={ALPHA_BOOST} intercept={0} />
-        </feComponentTransfer>
-      </filter>
-      <mask id={mid} maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
-        <image href={href} x={bx} y={by} width={W} height={H} preserveAspectRatio="xMidYMid meet" />
-      </mask>
-    </>
-  );
-}
 
 /**
  * Teiknar eit køyretøy-PNG med rotasjon rundt eit valgt pivotpunkt (px, py).
- * bx, by = øvre venstre hjørne av biletet i LOCAL (urotert) koordinatsystem.
- * px, py = pivot-punkt (rotert rundt dette punktet).
  */
-function VehiclePng({ href, bx, by, W, H, rotation, px, py, fid, mid }: {
+function VehiclePng({ href, bx, by, W, H, rotation, px, py, filterId }: {
   href: string; bx: number; by: number; W: number; H: number;
-  rotation: number; px: number; py: number; fid: string; mid: string;
+  rotation: number; px: number; py: number; filterId: string;
 }) {
   return (
     <g transform={`rotate(${rotation} ${px} ${py})`}>
       <image href={href} x={bx} y={by} width={W} height={H}
         preserveAspectRatio="xMidYMid meet"
-        filter={`url(#${fid})`} mask={`url(#${mid})`} />
+        filter={`url(#${filterId})`} />
     </g>
   );
 }
@@ -77,12 +50,12 @@ function ReversePath({ from, to, uid }: {
   return <path d={d} fill="none" stroke="#dc2626" strokeWidth={1.5} strokeDasharray="6 4" markerEnd={`url(#arr-red-${uid})`} />;
 }
 
-// ─── Hjelpefunksjon: teiknar éi side (excav + lastebil) ─────────────────────
+// ─── Teiknar éi side (gravemaskin + lastebil) ────────────────────────────────
 interface SideDrawProps {
   cfg: ExcavSideConfig;
   side: "below" | "above";
-  excavCx: number;         // X-senter gravemaskin (frå pos)
-  excavCy: number;         // Y-senter gravemaskin
+  excavCx: number;
+  excavCy: number;
   excavW: number;
   excavH: number;
   truckW: number;
@@ -90,69 +63,51 @@ interface SideDrawProps {
   trenchX1: number;
   trenchX2: number;
   uid: string;
-  efid: string; emid: string;      // excav filter/mask id
-  trfLid: string; trmLid: string;  // truck-left filter/mask
-  trfRid: string; trmRid: string;  // truck-right filter/mask
+  filterId: string;
 }
 
 function SideDraw({
   cfg, side, excavCx, excavCy, excavW, excavH,
-  truckW, truckH, trenchX1, trenchX2, uid,
-  efid, emid, trfLid, trmLid, trfRid, trmRid,
+  truckW, truckH, trenchX1, trenchX2, uid, filterId,
 }: SideDrawProps) {
   if (!cfg.enabled) return null;
 
   const rot = cfg.rotation;
-
-  // Gravemaskin-bilete: pivot er understell-senter (excavCx, excavCy)
   const excavBx = Math.round(excavCx - EXCAV_BODY_FRAC_X * excavW);
   const excavBy = Math.round(excavCy - EXCAV_BODY_FRAC_Y * excavH);
-
-  // Armspiss = EXCAV_ARM_REACH_FRAC * W frå understell-senter
   const armReach = excavW * EXCAV_ARM_REACH_FRAC;
-
-  // Dump-senter på lastebil (rotation=0) er TRUCK_DUMP_FRAC frå VENSTRE kant
-  // = (TRUCK_DUMP_FRAC - 0.5)*truckW frå senter = 0.35*truckW til VENSTRE for senter
-  // Vi vil ha dump-senter VED armspiss:
-  //   truckRight senter = armspiss + (0.5 − TRUCK_DUMP_FRAC)*truckW = armspiss + 0.35*truckW
-  //   truckLeft  senter = armspiss − (0.5 − TRUCK_DUMP_FRAC)*truckW = armspiss − 0.35*truckW
   const dumpToCenter = (0.5 - TRUCK_DUMP_FRAC) * truckW; // 0.35 * truckW
 
-  // Truck frå VENSTRE (arm rot=180; dump på HØGRE side av rot=180-truck = +0.35 frå senter)
+  // Lastebil frå VENSTRE (arm rot=180; dump ved arm-spiss mot venstre)
   const truckLeftCX  = Math.round(excavCx - armReach - dumpToCenter);
-  const truckLeftROT = 180;
   const truckLeftBx  = Math.round(truckLeftCX - truckW / 2);
-  const truckLeftBy  = Math.round(excavCy     - truckH / 2);
+  const truckLeftBy  = Math.round(excavCy - truckH / 2);
 
-  // Truck frå HØGRE (arm rot=0; dump på VENSTRE side = −0.35 frå senter)
+  // Lastebil frå HØGRE (arm rot=0; dump ved arm-spiss mot høgre)
   const truckRightCX  = Math.round(excavCx + armReach + dumpToCenter);
-  const truckRightROT = 0;
   const truckRightBx  = Math.round(truckRightCX - truckW / 2);
-  const truckRightBy  = Math.round(excavCy       - truckH / 2);
+  const truckRightBy  = Math.round(excavCy - truckH / 2);
 
+  // Lastebil RETT INN (perpendikulær til grøft):
+  // Arm-spiss: for "below"+rot90 → sør for excav; for "above"+rot270 → nord for excav
+  const armTipY = side === "below"
+    ? Math.round(excavCy + armReach)   // rot=90: arm peikar sør
+    : Math.round(excavCy - armReach);  // rot=270: arm peikar nord
+  // Dump-senter ved arm-spiss: pivot=armTip, bx/by slik at dump-senter er ved pivot etter rotering
+  const truckStraightBx  = Math.round(excavCx - TRUCK_DUMP_FRAC * truckW);
+  const truckStraightBy  = Math.round(armTipY - 0.5 * truckH);
+  const truckStraightRot = side === "below" ? 90 : 270;
+
+  // Retur: Lastebil FYRST (under), deretter gravemaskin (arm kjem over lastebilen)
   return (
     <>
-      {/* Gravemaskin — roterer rundt understell-senter (excavCx, excavCy) */}
-      <VehiclePng
-        href={EXCAVATOR_TOP_PNG}
-        bx={excavBx} by={excavBy}
-        W={excavW} H={excavH}
-        rotation={rot}
-        px={Math.round(excavCx)} py={Math.round(excavCy)}
-        fid={efid} mid={emid}
-      />
-      <text x={trenchX1 - 6} y={Math.round(excavCy) + 4} fontSize={9} fill="#78350f" textAnchor="end">
-        Gravemaskin
-      </text>
-
       {/* Lastebil frå VENSTRE */}
       {cfg.truckFromLeft && (
         <>
           <VehiclePng href={TRUCK_TOP_PNG}
             bx={truckLeftBx} by={truckLeftBy} W={truckW} H={truckH}
-            rotation={truckLeftROT}
-            px={truckLeftCX} py={Math.round(excavCy)}
-            fid={trfLid} mid={trmLid} />
+            rotation={180} px={truckLeftCX} py={Math.round(excavCy)}
+            filterId={filterId} />
           <ReversePath
             from={{ x: Math.round(truckLeftCX + truckW * 0.50), y: Math.round(excavCy) }}
             to={{ x: trenchX1, y: Math.round(excavCy) }}
@@ -166,9 +121,8 @@ function SideDraw({
         <>
           <VehiclePng href={TRUCK_TOP_PNG}
             bx={truckRightBx} by={truckRightBy} W={truckW} H={truckH}
-            rotation={truckRightROT}
-            px={truckRightCX} py={Math.round(excavCy)}
-            fid={trfRid} mid={trmRid} />
+            rotation={0} px={truckRightCX} py={Math.round(excavCy)}
+            filterId={filterId} />
           <ReversePath
             from={{ x: Math.round(truckRightCX - truckW * 0.50), y: Math.round(excavCy) }}
             to={{ x: trenchX2, y: Math.round(excavCy) }}
@@ -176,12 +130,36 @@ function SideDraw({
           />
         </>
       )}
+
+      {/* Lastebil RETT INN */}
+      {cfg.truckStraight && (
+        <>
+          <VehiclePng href={TRUCK_TOP_PNG}
+            bx={truckStraightBx} by={truckStraightBy} W={truckW} H={truckH}
+            rotation={truckStraightRot} px={Math.round(excavCx)} py={armTipY}
+            filterId={filterId} />
+        </>
+      )}
+
+      {/* Gravemaskin SIST — arm kjem over lastebilen */}
+      <VehiclePng
+        href={EXCAVATOR_TOP_PNG}
+        bx={excavBx} by={excavBy}
+        W={excavW} H={excavH}
+        rotation={rot}
+        px={Math.round(excavCx)} py={Math.round(excavCy)}
+        filterId={filterId}
+      />
+      <text x={trenchX1 - 6} y={Math.round(excavCy) + 4} fontSize={9} fill="#78350f" textAnchor="end">
+        Gravemaskin
+      </text>
     </>
   );
 }
 
 export function PlanSketchV3({ params }: { params: SketchV3Params }) {
   const uid = useId().replace(/:/g, "");
+  const filterId = `veh-${uid}`;
 
   // ─── Grøft-geometri ─────────────────────────────────────────────────────────
   const angleRad   = (wallAngleDeg(params.securingMethod) * Math.PI) / 180;
@@ -208,39 +186,27 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
   const hasBelow = params.excavBelow.enabled;
   const hasAbove = params.excavAbove.enabled;
 
-  // ─── Gravemaskin X-posisjon per side ────────────────────────────────────────
   const fracOf = (pos: "left" | "center" | "right") =>
     pos === "left" ? 0.2 : pos === "right" ? 0.8 : 0.5;
 
-  // ─── X-marginar ──────────────────────────────────────────────────────────────
-  // Truck-ytterkant = armspiss ± (0.5 + (0.5−TRUCK_DUMP_FRAC))*truckW = ± (1−0.15)*truckW = ±0.85*truckW
-  // frå excavCx ± 0.76*excavW ± 0.35*truckW (dump-senter ved armspiss) ± 0.5*truckW (half-width)
-  // = excavCx ± (0.76*excavW + 0.85*truckW)
   const truckXMargin = Math.round(excavW * EXCAV_ARM_REACH_FRAC + truckW * 0.85);
-  const hasTruckRight = hasBelow && params.excavBelow.truckFromRight ||
-                        hasAbove && params.excavAbove.truckFromRight;
-  const hasTruckLeft  = hasBelow && params.excavBelow.truckFromLeft  ||
-                        hasAbove && params.excavAbove.truckFromLeft;
+  const hasTruckRight = (hasBelow && params.excavBelow.truckFromRight) || (hasAbove && params.excavAbove.truckFromRight);
+  const hasTruckLeft  = (hasBelow && params.excavBelow.truckFromLeft)  || (hasAbove && params.excavAbove.truckFromLeft);
 
-  const dimMarginLeft = params.showMassehaug ? 52 : 36;
+  const showMassehaugAbove = params.showMassehaug;
+  const showMassehaugBelow = params.massehaugBelow ?? false;
+
+  const dimMarginLeft = (showMassehaugAbove || showMassehaugBelow) ? 52 : 36;
   const leftPad  = dimMarginLeft + (hasTruckLeft  ? truckXMargin : 0);
   const rightPad = 16            + (hasTruckRight ? truckXMargin : 0);
   const topMargin    = 44;
-  const bottomMargin = 38;
+  const bottomMargin = showMassehaugBelow ? 38 + massehaugWPx + massehaugDPx : 38;
 
   const trenchX1 = leftPad;
   const trenchX2 = trenchX1 + trenchLenPx;
   const svgW     = trenchX2 + rightPad;
 
-  // ─── Y-layout: BELTE-KANT = excavDPx frå grøftkant (avheng av rotasjon) ────
-  // Halvdistansen frå pivot til nærmaste belte-kant (mot grøfta):
-  //   rot 0°/180°: EXCAV_BODY_FRAC_Y * H  (belte topp/botn i orig. orientering)
-  //   rot 90°/270°: EXCAV_BODY_FRAC_X * W  (belte framkant/-bakre etter rotasjon)
-  // Halvdistansen frå pivot til fjernaste kant (bort frå grøfta):
-  //   rot 0°/180°: (1−EXCAV_BODY_FRAC_Y) * H  ≈ 0.5*H
-  //   rot 90° (arm bort frå grøft): EXCAV_ARM_REACH_FRAC * W  (arm strekk seg langt)
-  //   rot 270° (arm mot grøft): EXCAV_BODY_FRAC_X * W
-
+  // ─── Y-layout ────────────────────────────────────────────────────────────────
   const beltNear = (rot: 0|90|180|270) =>
     (rot === 90 || rot === 270) ? EXCAV_BODY_FRAC_X * excavW : EXCAV_BODY_FRAC_Y * excavH;
   const beltFarBelow = (rot: 0|90|180|270) =>
@@ -254,12 +220,12 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
 
   let curY = topMargin;
 
-  // Massehaug
-  const massehaugY1 = curY;
-  const massehaugY2 = params.showMassehaug ? massehaugY1 + massehaugWPx : massehaugY1;
-  if (params.showMassehaug) curY = massehaugY2 + massehaugDPx;
+  // Massehaug ovanfor
+  const massehaugAboveY1 = curY;
+  const massehaugAboveY2 = showMassehaugAbove ? massehaugAboveY1 + massehaugWPx : massehaugAboveY1;
+  if (showMassehaugAbove) curY = massehaugAboveY2 + massehaugDPx;
 
-  // Gravemaskin ovanfor: legg til [fjernaste kant → pivot → næraste kant → excavDPx]
+  // Gravemaskin ovanfor
   if (hasAbove) {
     const rot = params.excavAbove.rotation;
     curY += Math.round(beltFarAbove(rot)) + Math.round(beltNear(rot)) + excavDPx;
@@ -269,15 +235,24 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
   const trenchY2 = trenchY1 + trenchTopWPx;
   curY = trenchY2;
 
-  // Gravemaskin nedanfor: [excavDPx → næraste kant → pivot → fjernaste kant]
+  // Gravemaskin nedanfor
   if (hasBelow) {
     const rot = params.excavBelow.rotation;
     curY += excavDPx + Math.round(beltNear(rot)) + Math.round(beltFarBelow(rot));
+    // Lastebil rett inn: legg til ekstra plass for lastebilen under gravemaskinen
+    if (params.excavBelow.truckStraight) {
+      curY += Math.round(truckW * 0.85);
+    }
   }
 
-  const svgContentH = curY + bottomMargin;
+  // Massehaug nedanfor
+  const massehaugBelowY1 = curY + (showMassehaugBelow ? massehaugDPx : 0);
+  const massehaugBelowY2 = showMassehaugBelow ? massehaugBelowY1 + massehaugWPx : massehaugBelowY1;
+  if (showMassehaugBelow) curY = massehaugBelowY2;
 
-  // Faktiske Y-senter: pivot slik at belte-kant er nøyaktig excavDPx frå grøft
+  const svgContentH = curY + 38;
+
+  // Faktiske Y-senter
   const excavAboveCY = hasAbove
     ? Math.round(trenchY1 - excavDPx - beltNear(params.excavAbove.rotation))
     : 0;
@@ -285,7 +260,6 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
     ? Math.round(trenchY2 + excavDPx + beltNear(params.excavBelow.rotation))
     : 0;
 
-  // X-senter
   const excavBelowCX = Math.round(trenchX1 + trenchLenPx * fracOf(params.excavBelow.pos));
   const excavAboveCX = Math.round(trenchX1 + trenchLenPx * fracOf(params.excavAbove.pos));
 
@@ -305,34 +279,19 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
   const bx     = svgW - Math.min(rightPad - 4, barPx + 20);
   const by     = titleY - 22;
 
-  // ─── Unike ID-ar for filter/mask ─────────────────────────────────────────────
   const mkId = (s: string) => `${s}-${uid}`;
 
   return (
     <svg viewBox={`0 0 ${svgW} ${svgH}`} width="100%"
       style={{ fontFamily: "Arial, sans-serif", background: "white", display: "block" }}>
       <defs>
-        {/* Gravemaskin ovanfor — bilete-øvre-venstre = body-pivot − frac*W/H */}
-        {hasAbove && <VehicleDefs fid={mkId("eaf")} mid={mkId("eam")} href={EXCAVATOR_TOP_PNG}
-          bx={Math.round(excavAboveCX - EXCAV_BODY_FRAC_X * excavW)}
-          by={Math.round(excavAboveCY - EXCAV_BODY_FRAC_Y * excavH)} W={excavW} H={excavH} />}
-        {/* Gravemaskin nedanfor */}
-        {hasBelow && <VehicleDefs fid={mkId("ebf")} mid={mkId("ebm")} href={EXCAVATOR_TOP_PNG}
-          bx={Math.round(excavBelowCX - EXCAV_BODY_FRAC_X * excavW)}
-          by={Math.round(excavBelowCY - EXCAV_BODY_FRAC_Y * excavH)} W={excavW} H={excavH} />}
-        {hasAbove && params.excavAbove.truckFromLeft && <VehicleDefs fid={mkId("talfl")} mid={mkId("talml")} href={TRUCK_TOP_PNG}
-          bx={Math.round(excavAboveCX - excavW*EXCAV_ARM_REACH_FRAC - (0.5-TRUCK_DUMP_FRAC)*truckW - truckW/2)}
-          by={Math.round(excavAboveCY - truckH/2)} W={truckW} H={truckH} />}
-        {hasAbove && params.excavAbove.truckFromRight && <VehicleDefs fid={mkId("tafrl")} mid={mkId("tamrl")} href={TRUCK_TOP_PNG}
-          bx={Math.round(excavAboveCX + excavW*EXCAV_ARM_REACH_FRAC + (0.5-TRUCK_DUMP_FRAC)*truckW - truckW/2)}
-          by={Math.round(excavAboveCY - truckH/2)} W={truckW} H={truckH} />}
-        {hasBelow && params.excavBelow.truckFromLeft && <VehicleDefs fid={mkId("tblfl")} mid={mkId("tblml")} href={TRUCK_TOP_PNG}
-          bx={Math.round(excavBelowCX - excavW*EXCAV_ARM_REACH_FRAC - (0.5-TRUCK_DUMP_FRAC)*truckW - truckW/2)}
-          by={Math.round(excavBelowCY - truckH/2)} W={truckW} H={truckH} />}
-        {hasBelow && params.excavBelow.truckFromRight && <VehicleDefs fid={mkId("tbfrl")} mid={mkId("tbmrl")} href={TRUCK_TOP_PNG}
-          bx={Math.round(excavBelowCX + excavW*EXCAV_ARM_REACH_FRAC + (0.5-TRUCK_DUMP_FRAC)*truckW - truckW/2)}
-          by={Math.round(excavBelowCY - truckH/2)} W={truckW} H={truckH} />}
-
+        {/* Felles knockout-filter for alle køyretøy — ingen maske */}
+        <filter id={filterId} x="-5%" y="-5%" width="110%" height="110%" colorInterpolationFilters="sRGB">
+          <feColorMatrix in="SourceGraphic" type="matrix" values={KNOCKOUT_VALUES} result="k" />
+          <feComponentTransfer in="k" colorInterpolationFilters="sRGB">
+            <feFuncA type="linear" slope={ALPHA_BOOST} intercept={0} />
+          </feComponentTransfer>
+        </filter>
         <marker id={mkId("arr")} markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto">
           <polygon points="0,0 7,3.5 0,7" fill="#374151" />
         </marker>
@@ -350,20 +309,19 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
 
       <rect x={0} y={0} width={svgW} height={svgContentH} fill="#eef3e8" />
 
-      {/* ─── Massehaug ──────────────────────────────────────────────────────── */}
-      {params.showMassehaug && (
+      {/* ─── Massehaug OVANFOR ───────────────────────────────────────────────── */}
+      {showMassehaugAbove && (
         <>
-          <rect x={trenchX1} y={massehaugY1} width={trenchLenPx} height={massehaugWPx}
+          <rect x={trenchX1} y={massehaugAboveY1} width={trenchLenPx} height={massehaugWPx}
             fill={`url(#${mkId("soil")})`} stroke="#b8976a" strokeWidth={1.5} />
-          <text x={trenchX1 - 6} y={Math.round((massehaugY1 + massehaugY2) / 2) + 4}
+          <text x={trenchX1 - 6} y={Math.round((massehaugAboveY1 + massehaugAboveY2) / 2) + 4}
             fontSize={9} fill="#6b5a3e" textAnchor="end">Massehaug</text>
-          {/* Massehaug-avstandsdim: BERRE vis når ingen gravemaskin på ovanfor-sida */}
           {!hasAbove && massehaugDPx > 4 && (() => {
             const dx = trenchX1 - 20;
-            const my = Math.round((massehaugY2 + trenchY1) / 2);
+            const my = Math.round((massehaugAboveY2 + trenchY1) / 2);
             return (
               <g>
-                <line x1={dx} y1={massehaugY2} x2={dx} y2={trenchY1}
+                <line x1={dx} y1={massehaugAboveY2} x2={dx} y2={trenchY1}
                   stroke="#374151" strokeWidth={1}
                   markerStart={`url(#${mkId("arr-rev")})`} markerEnd={`url(#${mkId("arr")})`} />
                 <text x={dx - 3} y={my + 4} fontSize={8} fill="#374151" textAnchor="middle"
@@ -376,16 +334,8 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
         </>
       )}
 
-      {/* ─── Gravemaskin + lastebil OVANFOR ─────────────────────────────────── */}
-      <SideDraw
-        cfg={params.excavAbove} side="above"
-        excavCx={excavAboveCX} excavCy={excavAboveCY}
-        excavW={excavW} excavH={excavH} truckW={truckW} truckH={truckH}
-        trenchX1={trenchX1} trenchX2={trenchX2} uid={uid}
-        efid={mkId("eaf")} emid={mkId("eam")}
-        trfLid={mkId("talfl")} trmLid={mkId("talml")}
-        trfRid={mkId("tafrl")} trmRid={mkId("tamrl")}
-      />
+      {/* ─── Gravemaskin OVANFOR — teikna ETTER massehaug, FØR grøft for nå ─── */}
+      {/* NB: vert teikna om att ETTER grøfta nedanfor, for å vise arm over grøft */}
 
       {/* ─── Grøft ──────────────────────────────────────────────────────────── */}
       <rect x={trenchX1} y={trenchY1} width={trenchLenPx} height={trenchTopWPx}
@@ -398,7 +348,7 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
 
       {/* Breidde-dim */}
       {(() => {
-        const dx = trenchX1 - (params.showMassehaug && massehaugDPx > 4 && !hasAbove ? 36 : 20);
+        const dx = trenchX1 - ((showMassehaugAbove || showMassehaugBelow) && massehaugDPx > 4 && !hasAbove ? 36 : 20);
         const my = Math.round((trenchY1 + trenchY2) / 2);
         return (
           <g>
@@ -414,7 +364,7 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
         );
       })()}
 
-      {/* Belte-avstand dim: frå grøftkant til næraste belte-kant (rotasjonsavhengig) */}
+      {/* Belte-avstand dim */}
       {hasBelow && excavDPx > 4 && (() => {
         const dx = trenchX2 + 18;
         const beltEdgeY = Math.round(excavBelowCY - beltNear(params.excavBelow.rotation));
@@ -460,20 +410,35 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
         maks {escapeSpacingM.toFixed(0)} m mellom
       </text>
 
-      {/* ─── Gravemaskin + lastebil NEDANFOR ────────────────────────────────── */}
+      {/* ─── Gravemaskin OVANFOR — teikna ETTER grøfta → arm vises over grøftekanten ── */}
+      <SideDraw
+        cfg={params.excavAbove} side="above"
+        excavCx={excavAboveCX} excavCy={excavAboveCY}
+        excavW={excavW} excavH={excavH} truckW={truckW} truckH={truckH}
+        trenchX1={trenchX1} trenchX2={trenchX2} uid={uid} filterId={filterId}
+      />
+
+      {/* ─── Gravemaskin NEDANFOR ────────────────────────────────────────────── */}
       <SideDraw
         cfg={params.excavBelow} side="below"
         excavCx={excavBelowCX} excavCy={excavBelowCY}
         excavW={excavW} excavH={excavH} truckW={truckW} truckH={truckH}
-        trenchX1={trenchX1} trenchX2={trenchX2} uid={uid}
-        efid={mkId("ebf")} emid={mkId("ebm")}
-        trfLid={mkId("tblfl")} trmLid={mkId("tblml")}
-        trfRid={mkId("tbfrl")} trmRid={mkId("tbmrl")}
+        trenchX1={trenchX1} trenchX2={trenchX2} uid={uid} filterId={filterId}
       />
+
+      {/* ─── Massehaug NEDANFOR ─────────────────────────────────────────────── */}
+      {showMassehaugBelow && (
+        <>
+          <rect x={trenchX1} y={massehaugBelowY1} width={trenchLenPx} height={massehaugWPx}
+            fill={`url(#${mkId("soil")})`} stroke="#b8976a" strokeWidth={1.5} />
+          <text x={trenchX1 - 6} y={Math.round((massehaugBelowY1 + massehaugBelowY2) / 2) + 4}
+            fontSize={9} fill="#6b5a3e" textAnchor="end">Massehaug</text>
+        </>
+      )}
 
       {/* ─── Lengde-dim ─────────────────────────────────────────────────────── */}
       {(() => {
-        const dy = svgContentH - Math.round(bottomMargin / 2);
+        const dy = svgContentH - 18;
         return (
           <g>
             <line x1={trenchX1} y1={dy} x2={trenchX2} y2={dy} stroke="#374151" strokeWidth={1.5}

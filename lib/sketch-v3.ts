@@ -150,8 +150,9 @@ export interface ExcavSideConfig {
   enabled: boolean;
   pos: "left" | "center" | "right";           // posisjon langs grøfta
   rotation: 0 | 90 | 180 | 270;              // arm-retning (0=høgre, 90=ned, 180=venstre, 270=opp)
-  truckFromLeft: boolean;                     // lastebil frå venstre (losse til sida av gravemaskinen)
+  truckFromLeft: boolean;                     // lastebil frå venstre
   truckFromRight: boolean;                    // lastebil frå høgre
+  truckStraight: boolean;                     // lastebil køyrer rett inn (perpendikulær til grøft)
 }
 
 export const defaultExcavConfig = (enabled: boolean): ExcavSideConfig => ({
@@ -160,6 +161,7 @@ export const defaultExcavConfig = (enabled: boolean): ExcavSideConfig => ({
   rotation: 0,
   truckFromLeft: false,
   truckFromRight: false,
+  truckStraight: false,
 });
 
 export interface SketchV3Params {
@@ -169,12 +171,14 @@ export interface SketchV3Params {
   groundType: GroundType;
   securingMethod: SecuringMethod;
   trenchLengthM: number;
-  showMassehaug: boolean;
-  excavBelow: ExcavSideConfig;   // gravemaskin nedanfor grøfta
-  excavAbove: ExcavSideConfig;   // gravemaskin ovanfor grøfta
+  showMassehaug: boolean;       // massehaug ovanfor grøfta i plan
+  massehaugBelow: boolean;      // massehaug nedanfor grøfta i plan
+  excavBelow: ExcavSideConfig;  // gravemaskin nedanfor grøfta
+  excavAbove: ExcavSideConfig;  // gravemaskin ovanfor grøfta
   massehaugDistM: number;
   excavDistM: number;
-  excavFacingFront: boolean;     // tverrsnitt: frontvendt gravemaskin (standar: sidevendt)
+  excavFacingFront: boolean;    // tverrsnitt: frontvendt gravemaskin
+  excavSideLeft: boolean;       // tverrsnitt: sidevendt mot venstre (speglvendt)
   projectName: string;
   location: string;
   date: string;
