@@ -19,23 +19,6 @@ type Props = {
   soil: string;
 };
 
-function RenderSymbol({
-  x,
-  y,
-  symbol,
-  color
-}: {
-  x: number;
-  y: number;
-  symbol: SymbolType;
-  color: string;
-}) {
-  if (symbol === "sirkel") return <circle cx={x} cy={y} r="8" fill={color} />;
-  if (symbol === "trekant")
-    return <polygon points={`${x},${y - 9} ${x - 8},${y + 8} ${x + 8},${y + 8}`} fill={color} />;
-  return <rect x={x - 8} y={y - 8} width="16" height="16" fill={color} />;
-}
-
 export function PlanViewSketch({
   title,
   length,

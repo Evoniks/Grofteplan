@@ -33,7 +33,14 @@ export function CrossSectionSketch({
   const bw = Math.max(bottomWidth, 0.3);
   const tw = Math.max(topWidth, bw);
   const safeMassDistance = Math.max(massDistance, 0);
-  const slopeRule = method === "skrå gravesider" ? (d <= 2 ? "Dybde x 0,5 (ca. 63°)" : "Dybde x 0,75 (ca. 53°)") : "Avstivet grøft";
+  const slopeRule =
+    method === "ikke relevant"
+      ? "Ikke relevant"
+      : method === "skrå gravesider"
+        ? d <= 2
+          ? "Dybde x 0,5 (ca. 63°)"
+          : "Dybde x 0,75 (ca. 53°)"
+        : "Avstivet grøft";
   const maxDepth = 3.5;
   const maxTopWidth = 4.5;
   const trenchCenterX = 450;

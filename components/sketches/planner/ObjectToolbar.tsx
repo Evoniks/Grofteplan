@@ -10,7 +10,15 @@ type Props = {
   onDuplicate: () => void;
   onRotate: () => void;
   rotateLabel?: string;
-  /** Ekstra innhald vist under knapperekka når «Innstillingar» er open */
+  /** Alltid synleg rett under knappane (t.d. skalering for gravemaskin/lastebil). */
+  stripExtras?: ReactNode;
+  /** Vis «Innstillingar»-knapp (innhald rendrast av forelder under canvas når dock er aktiv). */
+  hasSettingsMenu?: boolean;
+  /** Når sann + hasSettingsMenu: meny vert ikkje vist i flytande boks; bruk settingsOpen/onSettingsOpenChange. */
+  settingsMenuDockBelow?: boolean;
+  settingsOpen?: boolean;
+  onSettingsOpenChange?: (open: boolean) => void;
+  /** Ekstra innhald under knappane når ikkje docka (gamal flytande modus). */
   menu?: ReactNode;
   menuTitle?: string;
 };
@@ -22,10 +30,28 @@ export function ObjectToolbar({
   onDuplicate,
   onRotate,
   rotateLabel = "Roter 90°",
+  stripExtras,
+  hasSettingsMenu = false,
+  settingsMenuDockBelow = false,
+  settingsOpen = false,
+  onSettingsOpenChange,
   menu,
   menuTitle = "Innstillingar"
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const docked = Boolean(hasSettingsMenu && settingsMenuDockBelow && onSettingsOpenChange);
+  const open = docked ? settingsOpen : internalOpen;
+  const showSettingsButton = docked ? hasSettingsMenu : Boolean(menu);
+
+  const toggleSettings = () => {
+    if (docked) onSettingsOpenChange?.(!settingsOpen);
+    else setInternalOpen((v) => !v);
+  };
+
+  const closeInlineMenu = () => {
+    if (docked) onSettingsOpenChange?.(false);
+    else setInternalOpen(false);
+  };
 
   return (
     <div
@@ -42,14 +68,17 @@ export function ObjectToolbar({
         <Button size="sm" variant="outline" onClick={onRotate}>
           {rotateLabel}
         </Button>
-        {menu && (
-          <Button size="sm" variant={open ? "default" : "secondary"} type="button" onClick={() => setOpen((v) => !v)}>
+        {showSettingsButton && (
+          <Button size="sm" variant={open ? "default" : "secondary"} type="button" onClick={toggleSettings}>
             {menuTitle}
           </Button>
         )}
       </div>
-      {open && menu && (
-        <ObjectToolbarMenuPanel onClose={() => setOpen(false)}>
+      {stripExtras && (
+        <div className="w-full min-w-[min(92vw,16rem)] border-t border-slate-200 px-1.5 pb-1.5 pt-2">{stripExtras}</div>
+      )}
+      {open && menu && !docked && (
+        <ObjectToolbarMenuPanel onClose={closeInlineMenu}>
           {menu}
         </ObjectToolbarMenuPanel>
       )}

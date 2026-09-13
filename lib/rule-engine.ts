@@ -7,6 +7,14 @@ export type RuleWarning = {
 };
 
 export function evaluateRules(data: PlanData): RuleWarning[] {
+  try {
+    return evaluateRulesInner(data);
+  } catch {
+    return [];
+  }
+}
+
+function evaluateRulesInner(data: PlanData): RuleWarning[] {
   const warnings: RuleWarning[] = [];
   const hasInstallasjoner =
     data.installasjonVa ||
@@ -31,6 +39,18 @@ export function evaluateRules(data: PlanData): RuleWarning[] {
       id: "depth200",
       severity: "critical",
       message: "Grøften må avstives eller graves med forsvarlig helling."
+    });
+  }
+
+  if (
+    data.sikringsmetode === "ikke relevant" &&
+    (data.maksDybdeMeter > 2 || data.dybdeOver200 || data.avstivingBehov === "ja")
+  ) {
+    warnings.push({
+      id: "sikringRequired",
+      severity: "warning",
+      message:
+        "Ved dybde over 2 m eller når avstiving er nødvendig bør sikringsmetode velges (ikke «Ikke relevant»)."
     });
   }
 
@@ -66,7 +86,7 @@ export function evaluateRules(data: PlanData): RuleWarning[] {
     });
   }
 
-  if (!data.kabelpavisningUtfort && hasInstallasjoner) {
+  if (!data.ingenKjenteInstallasjoner && !data.kabelpavisningUtfort && hasInstallasjoner) {
     warnings.push({
       id: "cableDetection",
       severity: "critical",
@@ -82,7 +102,8 @@ export function evaluateRules(data: PlanData): RuleWarning[] {
     });
   }
 
-  if (data.maksDybdeMeter > 1 && !data.romningsvei.trim()) {
+  const romningsveiText = (data.romningsvei ?? "").trim();
+  if ((data.maksDybdeMeter ?? 0) > 1 && !romningsveiText) {
     warnings.push({
       id: "egress",
       severity: "warning",

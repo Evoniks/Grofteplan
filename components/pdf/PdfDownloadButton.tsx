@@ -1,14 +1,9 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import type { PlanData } from "@/types/plan";
 import type { RuleWarning } from "@/lib/rule-engine";
 import { Button } from "@/components/ui/button";
-
-const PdfDownloadClient = dynamic(
-  () => import("@/components/pdf/PdfDownloadClient").then((mod) => mod.PdfDownloadClient),
-  { ssr: false }
-);
+import { PdfDownloadClient } from "@/components/pdf/PdfDownloadClient";
 
 export function PdfDownloadButton({
   data,
@@ -18,7 +13,7 @@ export function PdfDownloadButton({
   warnings: RuleWarning[];
 }) {
   return (
-    <div>
+    <div id="generer-pdf">
       <PdfDownloadClient data={data} warnings={warnings} />
       <noscript>
         <Button type="button" variant="default" disabled>

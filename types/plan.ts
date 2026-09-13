@@ -8,6 +8,7 @@ export const jordarter = [
 ] as const;
 
 export const sikringsmetoder = [
+  "ikke relevant",
   "skrå gravesider",
   "grøftekasse",
   "spunt",
@@ -28,11 +29,32 @@ export type Sikringsmetode = (typeof sikringsmetoder)[number];
 export type SkisseSymbol = (typeof skisseSymboler)[number];
 export type SkisseMal = (typeof skisseMaler)[number];
 
+export type LengdeprofilRad = {
+  pel: string;
+  masse: string;
+  dybde: string;
+};
+
+export type PersonIGroftRad = {
+  navn: string;
+  rolle: string;
+};
+
+export type AvstivingBehovValg = "" | "ja" | "nei_1_1";
+
 export type PlanData = {
   prosjektnavn: string;
   entreprenor: string;
   byggherre: string;
   ansvarligPerson: string;
+  dokumentnummer: string;
+  underprosjekt: string;
+  fkpAnsvarligGroft: string;
+  fkpAnsvarligGjennomforing: string;
+  /** Når true: én FKP dekker både grøft og gjennomføring. */
+  fkpSammePerson: boolean;
+  personerIGroft: string;
+  personerIGroftRader: PersonIGroftRad[];
   dato: string;
   revisjonsnummer: string;
   adresse: string;
@@ -50,7 +72,24 @@ export type PlanData = {
   skraningINarheten: boolean;
   byggINarheten: boolean;
   trafikkbelastningNarGroft: boolean;
+  /** Når true, hoppes installasjons-steget over i veiviseren. */
+  ingenKjenteInstallasjoner: boolean;
+  /** Når true, hoppes trafikk-steget over i veiviseren. */
+  trafikkStegIkkeAktuelt: boolean;
   geotekniskBehov: boolean;
+  grunnundersokelseProvegraving: boolean;
+  grunnundersokelseGrunnboring: boolean;
+  grunnundersokelseSondering: boolean;
+  grunnundersokelseIkkeForetatt: boolean;
+  grunnundersokelseAnnet: string;
+  avstivingBehov: AvstivingBehovValg;
+  avstivingKommentar: string;
+  lengdeprofilRader: LengdeprofilRad[];
+  plan215Lengdeprofil: string;
+  plan215Jordarter: string;
+  plan215Tverrprofil: string;
+  plan215Gravemasser: string;
+  plan215Arbeidsinstruks: string;
   installasjonVa: boolean;
   installasjonOvervann: boolean;
   installasjonSpillvann: boolean;
@@ -76,6 +115,12 @@ export type PlanData = {
   kontrollpunkter: string;
   utarbeidetAv: string;
   kontrollertAv: string;
+  /** PNG data-URL frå digital signatur. */
+  utarbeidetSignatur: string;
+  kontrollertSignatur: string;
+  godkjentSignatur: string;
+  godkjentAv: string;
+  godkjentDato: string;
   signaturDato: string;
   skisseTverrprofilTittel: string;
   skisseLengdeprofilTittel: string;

@@ -1,5 +1,6 @@
 "use client";
 
+import NextImage from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import type { SkisseMal } from "@/types/plan";
 
@@ -135,7 +136,7 @@ export function PosterTemplateSketch({ depth, bottomWidth, topWidth, length, mas
   const drawPosterToCanvas = async () => {
     const loadImage = (src: string) =>
       new Promise<HTMLImageElement>((resolve, reject) => {
-        const image = new Image();
+        const image = new window.Image();
         image.onload = () => resolve(image);
         image.onerror = () => reject(new Error(`Kunne ikke laste ${src}`));
         image.src = src;
@@ -239,21 +240,19 @@ export function PosterTemplateSketch({ depth, bottomWidth, topWidth, length, mas
         </div>
       </div>
       <div className="relative overflow-hidden rounded-md border border-slate-400 bg-slate-100">
-        <img
+        <NextImage
           src={displaySrc}
           alt="Skissemal for grøfteplan"
+          width={1600}
+          height={900}
           className="h-auto w-full"
-          onError={(event) => {
-            const current = event.currentTarget.src;
-            if (current.includes(".svg")) {
-              setDisplaySrc(templatePngSrc);
-              return;
-            }
-            if (current.includes(".png")) {
-              setDisplaySrc(fallbackImageSrc);
-              return;
-            }
-            event.currentTarget.onerror = null;
+          unoptimized
+          onError={() => {
+            setDisplaySrc((prev) => {
+              if (prev.includes(".svg")) return templatePngSrc;
+              if (prev.includes(".png")) return fallbackImageSrc;
+              return prev;
+            });
           }}
         />
         <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">

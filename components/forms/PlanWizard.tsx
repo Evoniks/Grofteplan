@@ -1,16 +1,21 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { planSchema, type PlanSchema } from "@/lib/schema";
-import type { PlanData, SkisseMal } from "@/types/plan";
+import type { PlanData } from "@/types/plan";
+import { planDefaultValues as defaultValues } from "@/lib/plan-defaults";
 import { evaluateRules } from "@/lib/rule-engine";
 import { loadPlanDraft, savePlanDraft } from "@/lib/plan-repository";
-import { CrossSectionCanvasSketch } from "@/components/sketches/CrossSectionCanvasSketch";
-import { PlanViewSketch } from "@/components/sketches/PlanViewSketch";
-import { TrenchSketch } from "@/components/sketches/TrenchSketch";
+import { loadTrenchPlannerExport } from "@/lib/trench-planner-storage";
+import { depthPlanHint, getVisibleWizardSteps, WIZARD_STEP_TITLES } from "@/lib/plan-wizard-steps";
 import { PdfDownloadButton } from "@/components/pdf/PdfDownloadButton";
+import { TrenchPlannerBridge } from "@/components/plan/TrenchPlannerBridge";
+import { AddressFields } from "@/components/forms/AddressFields";
+import { SignaturePad } from "@/components/forms/SignaturePad";
+import type { LengdeprofilRad, PersonIGroftRad } from "@/types/plan";
+import { formatPersonerIGroft, migratePlanDraft } from "@/lib/plan-draft-migrate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,116 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-const steps = [
-  "Prosjektinformasjon",
-  "Sted og omfang",
-  "Grøftegeometri",
-  "Grunnforhold",
-  "Installasjoner i grunnen",
-  "Trafikk og omgivelser",
-  "Sikringstiltak",
-  "Masser og rigg",
-  "Arbeidsinstruks",
-  "Kontroll og signering"
-];
-
-const defaultValues: PlanData = {
-  prosjektnavn: "",
-  entreprenor: "",
-  byggherre: "",
-  ansvarligPerson: "",
-  dato: new Date().toISOString().slice(0, 10),
-  revisjonsnummer: "R0",
-  adresse: "",
-  kommune: "",
-  arbeidsomrade: "",
-  groftelengdeMeter: 20,
-  maksDybdeMeter: 1.2,
-  breddeBunnMeter: 0.8,
-  breddeToppMeter: 1.8,
-  etappebeskrivelse: "",
-  dybdeOver125: false,
-  dybdeOver200: false,
-  jordart: "sand",
-  grunnvann: false,
-  skraningINarheten: false,
-  byggINarheten: false,
-  trafikkbelastningNarGroft: false,
-  geotekniskBehov: false,
-  installasjonVa: false,
-  installasjonOvervann: false,
-  installasjonSpillvann: false,
-  installasjonHoyspent: false,
-  installasjonLavspent: false,
-  installasjonFiberTele: false,
-  installasjonGassFjernvarme: false,
-  installasjonUkjent: false,
-  kabelpavisningUtfort: false,
-  sikringsmetode: "grøftekasse",
-  sikringBeskrivelse: "",
-  romningsvei: "",
-  avsperring: "",
-  plasseringGravemasser: "",
-  avstandFraGroftekantMeter: 1,
-  mellomlagring: "",
-  massetransport: "",
-  arbeidsbeskrivelse: "",
-  sikkerJobbAnalyseUtfort: false,
-  dagligKontroll: false,
-  kontrollEtterUvaer: false,
-  stoppkriterier: "",
-  kontrollpunkter: "",
-  utarbeidetAv: "",
-  kontrollertAv: "",
-  signaturDato: new Date().toISOString().slice(0, 10),
-  skisseTverrprofilTittel: "Typisk tverrprofil",
-  skisseLengdeprofilTittel: "Planvisning (fugleperspektiv)",
-  skisseTerrengLabel: "Terrenglinje",
-  skisseLedningLabel: "Rør/ledning i bunn",
-  skisseMasserLabel: "Gravemasser",
-  skisseVisSymboler: true,
-  skisseMal: "template-01-skraasider",
-  skisseLedningSymbol: "sirkel",
-  skisseMasserSymbol: "firkant",
-  skisseDybdeMeter: 1.2,
-  skisseBreddeBunnMeter: 0.8,
-  skisseBreddeToppMeter: 1.8,
-  skisseMasseAvstandMeter: 1,
-  skisseLengdeMeter: 20
-};
-
-const sketchTemplateOptions: { id: SkisseMal; title: string; desc: string }[] = [
-  {
-    id: "template-01-skraasider",
-    title: "1. Grøft med skrå sider",
-    desc: "Standard prinsipp med skrå grøftesider."
-  },
-  {
-    id: "template-02-groftekasse",
-    title: "2. Grøft med grøftekasser",
-    desc: "Fokus på kasse og arbeid i sikret grøft."
-  },
-  {
-    id: "template-03-spunt",
-    title: "3. Grøft med spunt",
-    desc: "Vertikal sikring med spunt."
-  },
-  {
-    id: "template-04-avstiving-horisontal",
-    title: "4. Avstiving horisontal",
-    desc: "Horisontal avstiving uten kasse."
-  },
-  {
-    id: "template-05-dyp-spunt-avstiving",
-    title: "5. Dyp grøft med spunt/avstiving",
-    desc: "For dypere grøfter og høyere risiko."
-  },
-  {
-    id: "template-06-trafikkert-omraade",
-    title: "6. Trafikkert område",
-    desc: "Ekstra fokus på avsperring og kjøremønster."
-  }
-];
+const IKKE_AKTUELT = "Ikke aktuelt";
 
 type BoolFieldProps = {
   label: string;
@@ -135,6 +31,7 @@ type BoolFieldProps = {
   control: ReturnType<typeof useForm<PlanSchema>>["control"];
   hint?: string;
   links?: HelpLink[];
+  optional?: boolean;
 };
 
 type HelpLink = {
@@ -142,7 +39,7 @@ type HelpLink = {
   url: string;
 };
 
-function BoolField({ label, name, control, hint, links }: BoolFieldProps) {
+function BoolField({ label, name, control, hint, links, optional }: BoolFieldProps) {
   return (
     <Controller
       control={control}
@@ -152,6 +49,7 @@ function BoolField({ label, name, control, hint, links }: BoolFieldProps) {
           <Checkbox checked={Boolean(field.value)} onCheckedChange={(v) => field.onChange(Boolean(v))} />
           <Label className="flex items-center gap-2">
             <span>{label}</span>
+            {optional && <span className="text-xs font-normal text-slate-500">(valgfritt)</span>}
             {(hint || links?.length) && <HelpHint text={hint ?? ""} links={links} />}
           </Label>
         </div>
@@ -160,8 +58,22 @@ function BoolField({ label, name, control, hint, links }: BoolFieldProps) {
   );
 }
 
+function OptionalSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <details className="rounded-md border border-slate-200 bg-slate-50/80 p-3">
+      <summary className="cursor-pointer text-sm font-medium text-slate-800">{title}</summary>
+      <div className="mt-3 space-y-3">{children}</div>
+    </details>
+  );
+}
+
 export function PlanWizard() {
-  const [step, setStep] = useState(0);
+  const [mounted, setMounted] = useState(false);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [hasSavedSketch, setHasSavedSketch] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
+  const fraSkisseHandled = useRef(false);
+  const activeStepIdRef = useRef(0);
   const form = useForm<PlanSchema>({
     resolver: zodResolver(planSchema),
     mode: "onChange",
@@ -171,39 +83,170 @@ export function PlanWizard() {
   const allValues = form.watch();
 
   useEffect(() => {
-    void (async () => {
-      const stored = await loadPlanDraft();
-      if (stored) form.reset({ ...defaultValues, ...stored });
-    })();
-  }, [form]);
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
-    void savePlanDraft(allValues as PlanData);
-  }, [allValues]);
+    if (!mounted) return;
+    const refreshSketch = () => setHasSavedSketch(Boolean(loadTrenchPlannerExport()));
+    refreshSketch();
+    window.addEventListener("grofteplan-trench-export-saved", refreshSketch);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "grofteplan-trench-planner-v1") refreshSketch();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("grofteplan-trench-export-saved", refreshSketch);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    let cancelled = false;
+    void (async () => {
+      const stored = await loadPlanDraft();
+      if (cancelled) return;
+      if (stored) {
+        form.reset({ ...defaultValues, ...stored, ...migratePlanDraft(stored) });
+      }
+      setDraftReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [form, mounted]);
+
+  useEffect(() => {
+    if (!mounted || !draftReady) return;
+    const t = window.setTimeout(() => {
+      void savePlanDraft(allValues as PlanData);
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [allValues, mounted, draftReady]);
+
+  useEffect(() => {
+    if (!mounted || !draftReady) return;
+    return () => {
+      void savePlanDraft(form.getValues() as PlanData);
+    };
+  }, [mounted, draftReady, form]);
 
   useEffect(() => {
     form.setValue("dybdeOver125", allValues.maksDybdeMeter > 1.25);
     form.setValue("dybdeOver200", allValues.maksDybdeMeter > 2);
   }, [allValues.maksDybdeMeter, form]);
 
+  const visibleSteps = useMemo(
+    () => getVisibleWizardSteps(allValues as PlanData),
+    [allValues]
+  );
+  const step = visibleSteps[stepIndex] ?? 0;
+
+  useEffect(() => {
+    activeStepIdRef.current = step;
+  }, [step]);
+
+  useEffect(() => {
+    const targetId = activeStepIdRef.current;
+    const newIndex = visibleSteps.indexOf(targetId);
+    if (newIndex >= 0) {
+      setStepIndex((prev) => (prev === newIndex ? prev : newIndex));
+      return;
+    }
+    if (stepIndex >= visibleSteps.length) {
+      const fallback = visibleSteps.filter((s) => s < targetId).pop() ?? visibleSteps[0] ?? 0;
+      setStepIndex(Math.max(0, visibleSteps.indexOf(fallback)));
+    }
+  }, [visibleSteps, stepIndex]);
+
+  useEffect(() => {
+    if (!mounted || visibleSteps.length === 0 || fraSkisseHandled.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("fra") !== "skisse") return;
+    fraSkisseHandled.current = true;
+    setStepIndex(visibleSteps.length - 1);
+    const t = window.setTimeout(() => {
+      document.getElementById("generer-pdf")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const path = `${window.location.pathname}${window.location.hash}`;
+      window.history.replaceState(null, "", path);
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [mounted, visibleSteps.length]);
+
+  useEffect(() => {
+    if (!allValues.fkpSammePerson) return;
+    const groft = (allValues.fkpAnsvarligGroft ?? "").trim();
+    if ((allValues.fkpAnsvarligGjennomforing ?? "").trim() !== groft) {
+      form.setValue("fkpAnsvarligGjennomforing", groft);
+    }
+  }, [allValues.fkpSammePerson, allValues.fkpAnsvarligGroft, allValues.fkpAnsvarligGjennomforing, form]);
+
+  useEffect(() => {
+    const text = formatPersonerIGroft(allValues.personerIGroftRader);
+    if (text !== (allValues.personerIGroft ?? "")) {
+      form.setValue("personerIGroft", text);
+    }
+  }, [allValues.personerIGroftRader, allValues.personerIGroft, form]);
+
+  const ingenInstallasjoner = allValues.ingenKjenteInstallasjoner;
+  const onLastStep = stepIndex >= visibleSteps.length - 1;
+  useEffect(() => {
+    if (!ingenInstallasjoner) return;
+    form.setValue("installasjonVa", false);
+    form.setValue("installasjonOvervann", false);
+    form.setValue("installasjonSpillvann", false);
+    form.setValue("installasjonHoyspent", false);
+    form.setValue("installasjonLavspent", false);
+    form.setValue("installasjonFiberTele", false);
+    form.setValue("installasjonGassFjernvarme", false);
+    form.setValue("installasjonUkjent", false);
+    form.setValue("kabelpavisningUtfort", false);
+  }, [ingenInstallasjoner, form]);
+
   const warnings = useMemo(() => evaluateRules(allValues as PlanData), [allValues]);
-  const hasInstallations =
-    allValues.installasjonVa ||
-    allValues.installasjonOvervann ||
-    allValues.installasjonSpillvann ||
-    allValues.installasjonHoyspent ||
-    allValues.installasjonLavspent ||
-    allValues.installasjonFiberTele ||
-    allValues.installasjonGassFjernvarme ||
-    allValues.installasjonUkjent;
+
+  if (!mounted) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">
+        Laster skjema …
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      {hasSavedSketch ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          <strong>Skisser er lagra.</strong> Fyll ut skjemaet under og trykk «Generer PDF» på siste steg for hele
+          grøfteplanen med skisser, varsler og signering.
+          {!onLastStep ? (
+            <button
+              type="button"
+              className="ml-2 font-medium text-emerald-800 underline"
+              onClick={() => setStepIndex(visibleSteps.length - 1)}
+            >
+              Gå til siste steg
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          Tips: Lag skisser i{" "}
+          <a href="/skisseverktoy" className="font-medium text-brand-700 underline">
+            skisseverktøyet
+          </a>{" "}
+          først — de kan tas med i PDF når du er ferdig med skjemaet.
+        </div>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle>Steg {step + 1}: {steps[step]}</CardTitle>
+          <CardTitle>
+            Steg {stepIndex + 1} av {visibleSteps.length}: {WIZARD_STEP_TITLES[step]}
+          </CardTitle>
           <CardDescription>
-            Fyll ut informasjonen for å generere en komplett grøfteplan med regelkontroll og PDF.
+            Fyll ut det som gjelder for prosjektet. Valgfrie felt kan stå tomme eller fylles med «Ikke aktuelt».
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -222,14 +265,113 @@ export function PlanWizard() {
                 <Input {...form.register("ansvarligPerson")} />
               </Field>
               <Field label="Dato"><Input type="date" {...form.register("dato")} /></Field>
-              <Field label="Revisjonsnummer"><Input {...form.register("revisjonsnummer")} /></Field>
+              <OptionalSection title="Valgfritt – dokumentasjon og roller">
+                <Field label="Revisjonsnummer" optional>
+                  <Input {...form.register("revisjonsnummer")} placeholder="R0" />
+                </Field>
+                <Field label="Dokumentnummer" optional>
+                  <Input {...form.register("dokumentnummer")} placeholder="T.d. 030603-010 B" />
+                </Field>
+                <Field label="Underprosjekt" optional>
+                  <Input {...form.register("underprosjekt")} />
+                </Field>
+                <div className="md:col-span-2 space-y-2">
+                  <BoolField
+                    control={form.control}
+                    name="fkpSammePerson"
+                    label="Samme person er FKP for grøft og gjennomføring"
+                    optional
+                  />
+                  {allValues.fkpSammePerson ? (
+                    <Field
+                      className="md:col-span-2"
+                      label="FKP – ansvarlig grøft og gjennomføring"
+                      optional
+                      hint="Faglig kompetent person med ansvar for grøfta og gjennomføringen."
+                    >
+                      <Input
+                        {...form.register("fkpAnsvarligGroft")}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          form.setValue("fkpAnsvarligGroft", v);
+                          form.setValue("fkpAnsvarligGjennomforing", v);
+                        }}
+                      />
+                    </Field>
+                  ) : (
+                    <>
+                      <Field
+                        label="FKP – ansvarlig grøft"
+                        optional
+                        hint="Faglig kompetent person med ansvar for grøfta."
+                      >
+                        <Input {...form.register("fkpAnsvarligGroft")} />
+                      </Field>
+                      <Field label="FKP – ansvarlig for gjennomføring" optional>
+                        <Input {...form.register("fkpAnsvarligGjennomforing")} />
+                      </Field>
+                    </>
+                  )}
+                </div>
+                <div className="md:col-span-2 space-y-2">
+                  <p className="text-sm font-medium text-slate-800">Personer i grøft (valgfritt)</p>
+                  {(allValues.personerIGroftRader ?? []).map((rad, i) => (
+                    <div key={i} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                      <Input
+                        placeholder="Navn"
+                        value={rad.navn}
+                        onChange={(e) => {
+                          const next = [...(allValues.personerIGroftRader ?? [])] as PersonIGroftRad[];
+                          next[i] = { ...next[i], navn: e.target.value };
+                          form.setValue("personerIGroftRader", next);
+                        }}
+                      />
+                      <Input
+                        placeholder="Rolle (valgfritt)"
+                        value={rad.rolle}
+                        onChange={(e) => {
+                          const next = [...(allValues.personerIGroftRader ?? [])] as PersonIGroftRad[];
+                          next[i] = { ...next[i], rolle: e.target.value };
+                          form.setValue("personerIGroftRader", next);
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const next = (allValues.personerIGroftRader ?? []).filter((_, j) => j !== i);
+                          form.setValue(
+                            "personerIGroftRader",
+                            next.length ? next : [{ navn: "", rolle: "" }]
+                          );
+                        }}
+                      >
+                        Fjern
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      form.setValue("personerIGroftRader", [
+                        ...(allValues.personerIGroftRader ?? []),
+                        { navn: "", rolle: "" }
+                      ])
+                    }
+                  >
+                    Legg til person
+                  </Button>
+                </div>
+              </OptionalSection>
             </div>
           )}
 
           {step === 1 && (
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Adresse" hint="Adresse eller nærmeste stedsangivelse."><Input {...form.register("adresse")} /></Field>
-              <Field label="Kommune"><Input {...form.register("kommune")} /></Field>
+              <AddressFields form={form} />
               <Field
                 className="md:col-span-2"
                 label="Beskrivelse av arbeidsområdet"
@@ -270,24 +412,84 @@ export function PlanWizard() {
               <Field
                 className="md:col-span-2"
                 label="Etappebeskrivelse"
+                optional
                 hint="Beskriv hvordan arbeidet deles opp i etapper."
               >
-                <Textarea {...form.register("etappebeskrivelse")} />
+                <Textarea {...form.register("etappebeskrivelse")} placeholder="Valgfritt" />
               </Field>
-              <BoolField
-                control={form.control}
-                name="dybdeOver125"
-                label="Er grøften dypere enn 1,25 m?"
-                hint="Brukes for å utløse krav om grøfteplan."
-                links={[{ label: "Lovdata § 21-5 (plan for arbeidet)", url: "https://lovdata.no/forskrift/2011-12-06-1357/kap21" }]}
-              />
-              <BoolField
-                control={form.control}
-                name="dybdeOver200"
-                label="Er grøften dypere enn 2,0 m?"
-                hint="Dybder over 2,0 m krever strengere sikring."
-                links={[{ label: "Lovdata § 21-9 (avstiving/helling)", url: "https://lovdata.no/forskrift/2011-12-06-1357/kap21" }]}
-              />
+              <p className="md:col-span-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                {depthPlanHint(allValues.maksDybdeMeter)}
+              </p>
+              <div className="md:col-span-2 space-y-2 rounded-md border border-slate-200 p-3">
+                <p className="text-sm font-medium text-slate-800">Hva gjelder for dette prosjektet?</p>
+                <BoolField
+                  control={form.control}
+                  name="ingenKjenteInstallasjoner"
+                  label="Ingen kjente installasjoner i grunnen (hopp over steget)"
+                />
+                <BoolField
+                  control={form.control}
+                  name="trafikkStegIkkeAktuelt"
+                  label="Trafikk/vei nær grøft er ikke aktuelt (hopp over steget)"
+                />
+              </div>
+              <OptionalSection title="Valgfritt – lengdeprofil med massebeskrivelser">
+                {(allValues.lengdeprofilRader ?? []).map((rad, i) => (
+                  <div key={i} className="grid gap-2 md:grid-cols-4">
+                    <Input
+                      placeholder="Pel / strekk"
+                      value={rad.pel}
+                      onChange={(e) => {
+                        const next = [...(allValues.lengdeprofilRader ?? [])] as LengdeprofilRad[];
+                        next[i] = { ...next[i], pel: e.target.value };
+                        form.setValue("lengdeprofilRader", next);
+                      }}
+                    />
+                    <Input
+                      placeholder="Masse"
+                      value={rad.masse}
+                      onChange={(e) => {
+                        const next = [...(allValues.lengdeprofilRader ?? [])] as LengdeprofilRad[];
+                        next[i] = { ...next[i], masse: e.target.value };
+                        form.setValue("lengdeprofilRader", next);
+                      }}
+                    />
+                    <Input
+                      placeholder="Dybde"
+                      value={rad.dybde}
+                      onChange={(e) => {
+                        const next = [...(allValues.lengdeprofilRader ?? [])] as LengdeprofilRad[];
+                        next[i] = { ...next[i], dybde: e.target.value };
+                        form.setValue("lengdeprofilRader", next);
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const next = (allValues.lengdeprofilRader ?? []).filter((_, j) => j !== i);
+                        form.setValue("lengdeprofilRader", next.length ? next : [{ pel: "", masse: "", dybde: "" }]);
+                      }}
+                    >
+                      Fjern
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    form.setValue("lengdeprofilRader", [
+                      ...(allValues.lengdeprofilRader ?? []),
+                      { pel: "", masse: "", dybde: "" }
+                    ])
+                  }
+                >
+                  Legg til rad
+                </Button>
+              </OptionalSection>
             </div>
           )}
 
@@ -310,12 +512,31 @@ export function PlanWizard() {
               <BoolField control={form.control} name="grunnvann" label="Grunnvann/vanninnsig" hint="Kryss av ved synlig innsig eller høy vannstand." />
               <BoolField control={form.control} name="skraningINarheten" label="Skråning i nærheten" hint="Kryss av hvis skråninger kan påvirke stabilitet." />
               <BoolField control={form.control} name="byggINarheten" label="Bygg/fundament i nærheten" hint="Kryss av ved nærliggende bygg, murer eller fundamenter." />
-              <BoolField control={form.control} name="geotekniskBehov" label="Behov for geoteknisk vurdering" hint="Brukes når grunnforhold eller omgivelser er usikre." />
+              <BoolField
+                control={form.control}
+                name="geotekniskBehov"
+                label="Behov for geoteknisk vurdering"
+                optional
+                hint="Brukes når grunnforhold eller omgivelser er usikre."
+              />
+              <OptionalSection title="Valgfritt – grunnundersøkelser (rørstrekk)">
+                <BoolField control={form.control} name="grunnundersokelseProvegraving" label="Prøvegraving" />
+                <BoolField control={form.control} name="grunnundersokelseGrunnboring" label="Grunnboring" />
+                <BoolField control={form.control} name="grunnundersokelseSondering" label="Sondering (total/trykk/dreie)" />
+                <BoolField control={form.control} name="grunnundersokelseIkkeForetatt" label="Ikke foretatt" />
+                <Field label="Annet (kommenter)" optional>
+                  <Input {...form.register("grunnundersokelseAnnet")} />
+                </Field>
+              </OptionalSection>
             </div>
           )}
 
           {step === 4 && (
             <div className="grid gap-3 md:grid-cols-2">
+              <p className="md:col-span-2 text-sm text-slate-600">
+                Kryss av installasjonstyper som kan ligge i grøftetraseen. Fjern avkrysning på «Ingen kjente
+                installasjoner» i geometri-steget for å hoppe over dette steget.
+              </p>
               <BoolField control={form.control} name="installasjonVa" label="VA" />
               <BoolField control={form.control} name="installasjonOvervann" label="Overvann" />
               <BoolField control={form.control} name="installasjonSpillvann" label="Spillvann" />
@@ -354,11 +575,25 @@ export function PlanWizard() {
 
           {step === 6 && (
             <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Behov for avstiving" className="md:col-span-2" optional>
+                <select
+                  className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
+                  {...form.register("avstivingBehov")}
+                >
+                  <option value="">Velg …</option>
+                  <option value="nei_1_1">Nei – klarer skråning ca. 1:1</option>
+                  <option value="ja">Ja – avstiving nødvendig</option>
+                </select>
+              </Field>
+              <Field className="md:col-span-2" label="Kommentar avstiving" optional>
+                <Textarea {...form.register("avstivingKommentar")} placeholder="T.d. gode, stabile masser …" />
+              </Field>
               <Field
                 label="Valgt sikringsmetode"
-                hint="Velg hovedmetode for å sikre grøften mot ras."
+                hint="Påkrevd ved dybde over ca. 2 m eller når avstiving er nødvendig (jf. § 21-9). Velg «Ikke relevant» ved grundere grøfter uten særskilt avstiving/sikring."
               >
                 <select className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm" {...form.register("sikringsmetode")}>
+                  <option value="ikke relevant">Ikke relevant</option>
                   <option value="skrå gravesider">Skrå gravesider</option>
                   <option value="grøftekasse">Grøftekasse</option>
                   <option value="spunt">Spunt</option>
@@ -367,35 +602,56 @@ export function PlanWizard() {
               </Field>
               <Field
                 label="Rømningsvei/adkomst"
+                optional
                 hint="Beskriv hvordan arbeidere kommer trygt ned og opp av grøften."
                 example="Eksempel: Stige for hver 25. meter."
               >
-                <Input {...form.register("romningsvei")} />
+                <Input {...form.register("romningsvei")} placeholder="Valgfritt under ca. 1 m dybde" />
               </Field>
               <Field
                 className="md:col-span-2"
                 label="Beskrivelse av sikring"
+                optional={allValues.sikringsmetode === "ikke relevant"}
                 hint="Beskriv valgt løsning i praksis: metode, etapper, kontroll av grøftevegger og hvem som følger opp."
                 example="Eksempel: Grøftekasse flyttes etappevis hver 6. meter. Visuell kontroll av grøftevegger før oppstart og etter pauser."
                 links={[{ label: "Lovdata § 21-9 (gravegroper som skal avstives)", url: "https://lovdata.no/forskrift/2011-12-06-1357/kap21" }]}
               >
-                <Textarea {...form.register("sikringBeskrivelse")} />
+                <Textarea {...form.register("sikringBeskrivelse")} placeholder="Påkrevd når sikringsmetode er valgt" />
               </Field>
               <Field
                 className="md:col-span-2"
                 label="Avsperring/sikring mot tredjeperson"
+                optional
                 hint="Beskriv hvordan området sikres mot publikum, trafikk og uvedkommende."
                 example="Eksempel: Byggegjerde og sperrebånd rundt åpen grøft. Tydelig skilt, gangpassasje og lysmarkering i mørke."
                 links={[{ label: "Arbeidstilsynet: Gravearbeid (generelle forholdsregler)", url: "https://www.arbeidstilsynet.no/risikofylt-arbeid/gravearbeid/" }]}
               >
                 <Textarea {...form.register("avsperring")} />
               </Field>
+              <div className="md:col-span-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (allValues.sikringsmetode === "ikke relevant") {
+                      form.setValue("sikringBeskrivelse", IKKE_AKTUELT);
+                    }
+                    form.setValue("romningsvei", IKKE_AKTUELT);
+                    form.setValue("avsperring", IKKE_AKTUELT);
+                  }}
+                >
+                  Sett «Ikke aktuelt» på valgfrie sikringsfelt
+                </Button>
+              </div>
             </div>
           )}
 
           {step === 7 && (
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Plassering av gravemasser" hint="Hvor massene legges i forhold til grøfta."><Input {...form.register("plasseringGravemasser")} /></Field>
+              <Field label="Plassering av gravemasser" optional hint="Hvor massene legges i forhold til grøfta.">
+                <Input {...form.register("plasseringGravemasser")} />
+              </Field>
               <Field
                 label="Avstand fra grøftekant (m)"
                 hint="Anbefalt minst 1,0 meter."
@@ -405,6 +661,7 @@ export function PlanWizard() {
               </Field>
               <Field
                 label="Mellomlagring"
+                optional
                 hint="Beskriv hvor masser midlertidig lagres, varighet og sikring av haugene."
                 example="Eksempel: Mellomlagres på riggplass nord for trase i maks 48 timer."
               >
@@ -412,11 +669,26 @@ export function PlanWizard() {
               </Field>
               <Field
                 label="Massetransport"
+                optional
                 hint="Beskriv transportvei, type kjøretøy, frekvens og tiltak for trygg transport."
                 example="Eksempel: Bortkjøring med 3-akslet bil via riggvei mellom kl. 07-19."
               >
                 <Textarea {...form.register("massetransport")} />
               </Field>
+              <div className="md:col-span-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    form.setValue("plasseringGravemasser", IKKE_AKTUELT);
+                    form.setValue("mellomlagring", IKKE_AKTUELT);
+                    form.setValue("massetransport", IKKE_AKTUELT);
+                  }}
+                >
+                  Sett «Ikke aktuelt» på valgfrie massefelt
+                </Button>
+              </div>
             </div>
           )}
 
@@ -436,9 +708,28 @@ export function PlanWizard() {
               >
                 <Textarea {...form.register("stoppkriterier")} />
               </Field>
-              <BoolField control={form.control} name="sikkerJobbAnalyseUtfort" label="Sikker jobb-analyse utført?" />
-              <BoolField control={form.control} name="dagligKontroll" label="Daglig kontroll" />
-              <BoolField control={form.control} name="kontrollEtterUvaer" label="Kontroll etter regn/uvær/opphold" />
+              <p className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                Planen leveres før arbeid starter. Kryss av for tiltak og rutiner som skal gjelde under
+                gjennomføringen — ikke som dokumentasjon på at kontroll allerede er utført.
+              </p>
+              <BoolField
+                control={form.control}
+                name="sikkerJobbAnalyseUtfort"
+                label="Sikker jobb-analyse skal utføres før oppstart"
+                optional
+              />
+              <BoolField
+                control={form.control}
+                name="dagligKontroll"
+                label="Kontroll utføres daglig/forløpende"
+                optional
+              />
+              <BoolField
+                control={form.control}
+                name="kontrollEtterUvaer"
+                label="Etter utfordrende vær/uvær utføres ny kontroll før start av arbeid"
+                optional
+              />
             </div>
           )}
 
@@ -452,27 +743,117 @@ export function PlanWizard() {
               >
                 <Textarea {...form.register("kontrollpunkter")} />
               </Field>
-              <Field
-                label="Utarbeidet av"
-                hint="Personen som har laget planen."
-                example="Eksempel: Mariu M."
-                links={[{ label: "Byggherreforskriften § 7-8 (SHA-plan)", url: "https://lovdata.no/forskrift/2009-08-03-1028" }]}
-              >
-                <Input {...form.register("utarbeidetAv")} />
-              </Field>
-              <Field
-                label="Kontrollert av"
-                hint="Personen som har kontrollert planen. Bør helst være en annen person, men kan være samme i små prosjekter dersom dette begrunnes."
-                example="Eksempel: Kari K. (uavhengig kontroll)"
-                links={[{ label: "Byggherreforskriften § 8 og § 14", url: "https://lovdata.no/forskrift/2009-08-03-1028" }]}
-              >
-                <Input {...form.register("kontrollertAv")} />
-              </Field>
-              <Field label="Signaturdato"><Input type="date" {...form.register("signaturDato")} /></Field>
-              {allValues.utarbeidetAv.trim() &&
-                allValues.kontrollertAv.trim() &&
-                allValues.utarbeidetAv.trim().toLowerCase() ===
-                  allValues.kontrollertAv.trim().toLowerCase() && (
+              <div className="md:col-span-2 space-y-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Signatur</h3>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Skriv navn og signer digitalt i feltet under (mus, penn eller finger). Signaturen lagres og
+                    vises i PDF.
+                  </p>
+                </div>
+                <Field label="Signaturdato">
+                  <Input type="date" className="max-w-xs" {...form.register("signaturDato")} />
+                </Field>
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-3">
+                    <Field
+                      label="Utarbeidet av"
+                      hint="Personen som har laget planen."
+                      example="Eksempel: Mariu M."
+                      links={[
+                        {
+                          label: "Byggherreforskriften § 7-8 (SHA-plan)",
+                          url: "https://lovdata.no/forskrift/2009-08-03-1028"
+                        }
+                      ]}
+                    >
+                      <Input className="h-11" {...form.register("utarbeidetAv")} />
+                    </Field>
+                    <Controller
+                      control={form.control}
+                      name="utarbeidetSignatur"
+                      render={({ field }) => (
+                        <SignaturePad
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          aria-label="Signatur utarbeidet av"
+                        />
+                      )}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Field
+                      label="Kontrollert av"
+                      hint="Bør helst være en annen person; kan være samme i små prosjekter dersom det begrunnes."
+                      example="Eksempel: Kari K."
+                      links={[
+                        {
+                          label: "Byggherreforskriften § 8 og § 14",
+                          url: "https://lovdata.no/forskrift/2009-08-03-1028"
+                        }
+                      ]}
+                    >
+                      <Input className="h-11" {...form.register("kontrollertAv")} />
+                    </Field>
+                    <Controller
+                      control={form.control}
+                      name="kontrollertSignatur"
+                      render={({ field }) => (
+                        <SignaturePad
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          aria-label="Signatur kontrollert av"
+                        />
+                      )}
+                    />
+                  </div>
+                </div>
+              </div>
+              <OptionalSection title="Valgfritt – godkjenning">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Godkjent av" optional>
+                    <Input className="h-11" {...form.register("godkjentAv")} />
+                  </Field>
+                  <Field label="Godkjent dato" optional>
+                    <Input type="date" className="h-11" {...form.register("godkjentDato")} />
+                  </Field>
+                </div>
+                <div className="max-w-md">
+                  <p className="mb-2 text-xs font-medium text-slate-800">Godkjenning – signatur (valgfritt)</p>
+                  <Controller
+                    control={form.control}
+                    name="godkjentSignatur"
+                    render={({ field }) => (
+                      <SignaturePad
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        aria-label="Signatur godkjent av"
+                      />
+                    )}
+                  />
+                </div>
+              </OptionalSection>
+              <OptionalSection title="Valgfritt – § 21-5-tekst (import frå skisseverktøy eller manuelt)">
+                <Field label="a) Lengdeprofil" optional>
+                  <Textarea rows={2} {...form.register("plan215Lengdeprofil")} />
+                </Field>
+                <Field label="a) Jordarter / installasjoner" optional>
+                  <Textarea rows={2} {...form.register("plan215Jordarter")} />
+                </Field>
+                <Field label="b) Typiske tverrprofiler" optional>
+                  <Textarea rows={2} {...form.register("plan215Tverrprofil")} />
+                </Field>
+                <Field label="c) Plassering gravemasser" optional>
+                  <Textarea rows={2} {...form.register("plan215Gravemasser")} />
+                </Field>
+                <Field label="d) Arbeidsinstruks" optional>
+                  <Textarea rows={3} {...form.register("plan215Arbeidsinstruks")} />
+                </Field>
+              </OptionalSection>
+              {(allValues.utarbeidetAv ?? "").trim() &&
+                (allValues.kontrollertAv ?? "").trim() &&
+                (allValues.utarbeidetAv ?? "").trim().toLowerCase() ===
+                  (allValues.kontrollertAv ?? "").trim().toLowerCase() && (
                   <p className="md:col-span-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                     Utarbeidet av og kontrollert av er satt til samme person. Dette kan aksepteres i
                     mindre prosjekter, men det bør dokumenteres hvorfor uavhengig kontroll ikke er brukt.
@@ -482,173 +863,55 @@ export function PlanWizard() {
           )}
 
           <div className="flex flex-wrap gap-3">
-            <Button type="button" variant="outline" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setStepIndex((s) => Math.max(0, s - 1))}
+              disabled={stepIndex === 0}
+            >
               Forrige
             </Button>
-            <Button type="button" onClick={() => setStep((s) => Math.min(steps.length - 1, s + 1))} disabled={step === steps.length - 1}>
+            <Button
+              type="button"
+              onClick={() => setStepIndex((s) => Math.min(visibleSteps.length - 1, s + 1))}
+              disabled={stepIndex >= visibleSteps.length - 1}
+            >
               Neste
             </Button>
             <Button type="button" variant="secondary" onClick={() => form.reset(defaultValues)}>
               Nullstill
             </Button>
-            <PdfDownloadButton data={allValues as PlanData} warnings={warnings} />
+            <div className="w-full space-y-1 sm:w-auto">
+              <PdfDownloadButton data={allValues as PlanData} warnings={warnings} />
+              {onLastStep ? (
+                <p className="max-w-xs text-xs text-slate-600">
+                  Last ned komplett PDF med alle utfylte felt{hasSavedSketch ? " og lagra skisser" : ""}.
+                </p>
+              ) : (
+                <p className="max-w-xs text-xs text-slate-500">
+                  «Generer PDF» er tilgjengelig på alle steg; anbefalt når skjemaet er ferdig utfylt.
+                </p>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-slate-200">
         <CardHeader>
-          <CardTitle>Skissejustering</CardTitle>
+          <CardTitle className="text-base">Skisser frå skisseverktøy</CardTitle>
           <CardDescription>
-            Her kan du justere tekst, tall, avstander og symboler etter at skissen er generert.
+            Forhåndsvisning og import av § 21-5-tekst. Rediger skisser i{" "}
+            <a href="/skisseverktoy" className="text-brand-700 underline">
+              skisseverktøyet
+            </a>
+            .
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <Field label="Tittel tverrprofil"><Input {...form.register("skisseTverrprofilTittel")} /></Field>
-          <Field label="Tittel planvisning"><Input {...form.register("skisseLengdeprofilTittel")} /></Field>
-          <Field label="Etikett terrenglinje"><Input {...form.register("skisseTerrengLabel")} /></Field>
-          <Field label="Etikett ledning"><Input {...form.register("skisseLedningLabel")} /></Field>
-          <Field label="Etikett gravemasser"><Input {...form.register("skisseMasserLabel")} /></Field>
-          <BoolField
-            control={form.control}
-            name="skisseVisSymboler"
-            label="Vis symbolsignatur i skisse"
-          />
-
-          <Field className="md:col-span-2" label="Velg skissetype (mal)">
-            <Controller
-              control={form.control}
-              name="skisseMal"
-              render={({ field }) => (
-                <div className="grid gap-2 md:grid-cols-3">
-                  {sketchTemplateOptions.map((option) => {
-                    const active = field.value === option.id;
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => field.onChange(option.id)}
-                        className={`rounded-md border p-3 text-left transition ${
-                          active
-                            ? "border-brand-600 bg-brand-50 text-brand-900"
-                            : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                        }`}
-                        aria-pressed={active}
-                      >
-                        <div className="mb-1 flex items-center gap-2">
-                          <span
-                            className={`inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] ${
-                              active ? "border-brand-700 bg-brand-700 text-white" : "border-slate-400 text-transparent"
-                            }`}
-                          >
-                            ●
-                          </span>
-                          <span className="text-sm font-semibold">{option.title}</span>
-                        </div>
-                        <p className="text-xs">{option.desc}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            />
-          </Field>
-
-          <Field label="Symbol for ledning">
-            <select className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm" {...form.register("skisseLedningSymbol")}>
-              <option value="sirkel">Sirkel</option>
-              <option value="trekant">Trekant</option>
-              <option value="firkant">Firkant</option>
-            </select>
-          </Field>
-          <Field label="Symbol for masser">
-            <select className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm" {...form.register("skisseMasserSymbol")}>
-              <option value="sirkel">Sirkel</option>
-              <option value="trekant">Trekant</option>
-              <option value="firkant">Firkant</option>
-            </select>
-          </Field>
-
-          <Field label="Skisseverdi dybde (m)">
-            <Input type="number" step="0.1" {...form.register("skisseDybdeMeter", { valueAsNumber: true })} />
-          </Field>
-          <Field label="Skisseverdi bredde bunn (m)">
-            <Input type="number" step="0.1" {...form.register("skisseBreddeBunnMeter", { valueAsNumber: true })} />
-          </Field>
-          <Field label="Skisseverdi bredde topp (m)">
-            <Input type="number" step="0.1" {...form.register("skisseBreddeToppMeter", { valueAsNumber: true })} />
-          </Field>
-          <Field label="Skisseverdi avstand masser (m)">
-            <Input type="number" step="0.1" {...form.register("skisseMasseAvstandMeter", { valueAsNumber: true })} />
-          </Field>
-          <Field label="Skisseverdi plantrase lengde (m)">
-            <Input type="number" step="1" {...form.register("skisseLengdeMeter", { valueAsNumber: true })} />
-          </Field>
-          <div className="flex items-end">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                form.setValue("skisseDybdeMeter", allValues.maksDybdeMeter);
-                form.setValue("skisseBreddeBunnMeter", allValues.breddeBunnMeter);
-                form.setValue("skisseBreddeToppMeter", allValues.breddeToppMeter);
-                form.setValue("skisseMasseAvstandMeter", allValues.avstandFraGroftekantMeter);
-                form.setValue("skisseLengdeMeter", allValues.groftelengdeMeter);
-              }}
-            >
-              Hent tall fra skjema
-            </Button>
-          </div>
+        <CardContent>
+          <TrenchPlannerBridge form={form} />
         </CardContent>
       </Card>
-
-      <TrenchSketch
-        depth={allValues.skisseDybdeMeter}
-        bottomWidth={allValues.skisseBreddeBunnMeter}
-        topWidth={allValues.skisseBreddeToppMeter}
-        routeLength={allValues.skisseLengdeMeter}
-        massDistance={allValues.skisseMasseAvstandMeter}
-        method={allValues.sikringsmetode}
-      />
-
-      <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-          Avansert redigeringsmodus (interaktive skisser)
-        </summary>
-        <p className="mt-2 text-xs text-slate-600">
-          Brukes for manuell finjustering. Offisiell visning for eksport er plakatmodusen over.
-        </p>
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <CrossSectionCanvasSketch
-            title={allValues.skisseTverrprofilTittel}
-            depth={allValues.skisseDybdeMeter}
-            bottomWidth={allValues.skisseBreddeBunnMeter}
-            topWidth={allValues.skisseBreddeToppMeter}
-            massDistance={allValues.skisseMasseAvstandMeter}
-            method={allValues.sikringsmetode}
-            terrainLabel={allValues.skisseTerrengLabel}
-            pipeLabel={allValues.skisseLedningLabel}
-            massesLabel={allValues.skisseMasserLabel}
-            showSymbols={allValues.skisseVisSymboler}
-            pipeSymbol={allValues.skisseLedningSymbol}
-            massesSymbol={allValues.skisseMasserSymbol}
-          />
-          <PlanViewSketch
-            title={allValues.skisseLengdeprofilTittel}
-            length={allValues.skisseLengdeMeter}
-            topWidth={allValues.skisseBreddeToppMeter}
-            massDistance={allValues.skisseMasseAvstandMeter}
-            hasInstallations={hasInstallations}
-            terrainLabel={allValues.skisseTerrengLabel}
-            pipeLabel={allValues.skisseLedningLabel}
-            massesLabel={allValues.skisseMasserLabel}
-            showSymbols={allValues.skisseVisSymboler}
-            pipeSymbol={allValues.skisseLedningSymbol}
-            massesSymbol={allValues.skisseMasserSymbol}
-            soil={allValues.jordart}
-          />
-        </div>
-      </details>
 
       <Card className="border-amber-200 bg-amber-50">
         <CardHeader>
@@ -690,7 +953,8 @@ function Field({
   className,
   hint,
   example,
-  links
+  links,
+  optional
 }: {
   label: string;
   children: ReactNode;
@@ -698,11 +962,13 @@ function Field({
   hint?: string;
   example?: string;
   links?: HelpLink[];
+  optional?: boolean;
 }) {
   return (
     <div className={className}>
       <Label className="mb-2 flex items-center gap-2">
         <span>{label}</span>
+        {optional && <span className="text-xs font-normal text-slate-500">(valgfritt)</span>}
         {(hint || example || links?.length) && (
           <HelpHint text={[hint, example].filter(Boolean).join(" ")} links={links} />
         )}

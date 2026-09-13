@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/kill-next-dev.mjs && node scripts/prepare-dev.mjs && next dev --turbopack",
+    "dev:fresh": "node scripts/kill-next-dev.mjs && npm run clean && next dev --turbopack",
+    "dev:webpack": "node scripts/kill-next-dev.mjs && npm run clean && next dev",
+    "clean": "node scripts/clean-next.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

@@ -49,8 +49,9 @@ export const trenchTemplates: Record<"sloped", TrenchTemplateConfig> = {
     key: "sloped",
     title: "Skrå grøft",
     backgrounds: {
-      crossSection: "/templates/sloped-cross-section.png",
-      plan: "/templates/sloped-plan.png"
+      // Bruker PNG som ligg i repo (gamle /templates/sloped-*.png mangla og gav 404 / ustabile Image-SSR).
+      crossSection: "/skisse/trench-box-cross.png",
+      plan: "/skisse/escape-route-plan.png"
     },
     crossSection: {
       // Grøftekant: øverste kant av selve grøfta.

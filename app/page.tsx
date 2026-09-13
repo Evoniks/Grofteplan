@@ -13,8 +13,8 @@ export default function HomePage() {
           gjennomførbar graveplan i tråd med norske forventninger.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link href="/plan" className="inline-block">
-            <Button size="lg">Lag grøfteplan</Button>
+          <Link href="/planer" className="inline-block">
+            <Button size="lg">Mine planer</Button>
           </Link>
           <Link href="/skisseverktoy" className="inline-block">
             <Button size="lg" variant="secondary">Åpne skisseverktøy</Button>

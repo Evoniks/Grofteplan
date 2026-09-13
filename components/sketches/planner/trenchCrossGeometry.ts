@@ -13,6 +13,10 @@ export type TrenchCrossMetaInput = {
   slopeRatio?: number;
   slopeAngleLeftDeg?: number;
   slopeAngleRightDeg?: number;
+  /** Horisontal avstand mellom nedre veggpunkt (bunn grøft), px. */
+  innerBottomWidthPx?: number;
+  /** Horisontal avstand mellom øvre veggpunkt (topp grøft), px. Ikkje sett = fyller heile boksbreidda. */
+  innerTopWidthPx?: number;
 };
 
 export function clampWallAngleDeg(v: number): number {
@@ -56,9 +60,25 @@ export type TrenchCrossCorners = {
   bottomRight: { x: number; y: number };
 };
 
+function nominalWallInsets(width: number, height: number, meta?: TrenchCrossMetaInput) {
+  const { leftDeg, rightDeg } = resolveTrenchWallAngles(meta);
+  const wallH = height * (TRENCH_Y_BOT_FRAC - TRENCH_Y_TOP_FRAC);
+  const margin = width * 0.02;
+  const maxInset = width * 0.42;
+  const L0 = Math.min(wallAngleToHorizontalInset(wallH, leftDeg), maxInset);
+  const R0 = Math.min(wallAngleToHorizontalInset(wallH, rightDeg), maxInset);
+  return { margin, innerTopW: width - 2 * margin, L0, R0 };
+}
+
+/** Startverdi for `innerBottomWidthPx` (same som legacy før feltet fanst). */
+export function initialTrenchInnerBottomWidthPx(width: number, height: number, meta?: TrenchCrossMetaInput): number {
+  const { innerTopW, L0, R0 } = nominalWallInsets(width, height, meta);
+  return Math.max(20, innerTopW - L0 - R0);
+}
+
 /**
- * Beregner fire hjørner. Venstre vegg skrår inn (økande x nedover), høyre vegg inn (synkande x nedover).
- * Horisontale inset er proporsjonale med vegghøgd og cot(vinkel mot horisontal).
+ * Beregner fire hjørner. `width` på objektet er ytre boks for toppen (toppåpning + margin).
+ * Med `innerBottomWidthPx` vert bunnbreidda fast og veggane skalert når du endrar toppbreidda.
  */
 export function getTrenchCrossCorners(input: {
   x: number;
@@ -67,18 +87,46 @@ export function getTrenchCrossCorners(input: {
   height: number;
   meta?: TrenchCrossMetaInput;
 }): TrenchCrossCorners {
-  const { x, y, width, height } = input;
-  const { leftDeg, rightDeg } = resolveTrenchWallAngles(input.meta);
+  const { x, y, width, height, meta } = input;
   const yTop = y + height * TRENCH_Y_TOP_FRAC;
   const yBot = y + height * TRENCH_Y_BOT_FRAC;
-  const wallH = yBot - yTop;
-  const margin = width * 0.02;
-  const maxInset = width * 0.42;
-  const leftInset = Math.min(wallAngleToHorizontalInset(wallH, leftDeg), maxInset);
-  const rightInset = Math.min(wallAngleToHorizontalInset(wallH, rightDeg), maxInset);
-  const topLeft = { x: x + margin, y: yTop };
-  const topRight = { x: x + width - margin, y: yTop };
-  const bottomLeft = { x: topLeft.x + leftInset, y: yBot };
-  const bottomRight = { x: topRight.x - rightInset, y: yBot };
+  const { margin, innerTopW, L0, R0 } = nominalWallInsets(width, height, meta);
+
+  // Topp = alltid full bbox inner-breidde
+  const effectiveTopW = innerTopW;
+
+  const topLeft  = { x: x + margin,                y: yTop };
+  const topRight = { x: x + margin + effectiveTopW, y: yTop };
+
+  let bottomLeft: { x: number; y: number };
+  let bottomRight: { x: number; y: number };
+
+  if (meta?.innerBottomWidthPx != null && Number.isFinite(meta.innerBottomWidthPx)) {
+    // Eksplisitt bunnbreidde: rekn insets direkte — garanterer at teikna bottn = lagra verdi
+    const innerBottomW = Math.max(20, meta.innerBottomWidthPx);
+    const delta = effectiveTopW - innerBottomW;
+    const sum = L0 + R0;
+    let leftInset: number;
+    let rightInset: number;
+    if (delta <= 0) {
+      // Bunn breiare enn topp — teikn som rektangel
+      leftInset = 0;
+      rightInset = 0;
+    } else if (sum > 1e-6) {
+      // Fordel inntrykket proporsjonalt med veggvinklane (L:R-ratio)
+      leftInset  = delta * L0 / sum;
+      rightInset = delta * R0 / sum;
+    } else {
+      leftInset  = delta / 2;
+      rightInset = delta / 2;
+    }
+    bottomLeft  = { x: topLeft.x  + leftInset,  y: yBot };
+    bottomRight = { x: topRight.x - rightInset, y: yBot };
+  } else {
+    // Ingen eksplisitt bunnbreidde — bruk veggvinklane direkte
+    bottomLeft  = { x: topLeft.x  + L0, y: yBot };
+    bottomRight = { x: topRight.x - R0, y: yBot };
+  }
+
   return { topLeft, topRight, bottomLeft, bottomRight };
 }

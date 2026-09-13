@@ -14,6 +14,11 @@ type Props = {
   method: string;
 };
 
+function fmtMeter(value: number | undefined | null, decimals: number) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(decimals) : "—";
+}
+
 function MeasurementSection({
   title,
   backgroundSrc,
@@ -79,19 +84,19 @@ export function TrenchSketch({ depth, bottomWidth, topWidth, routeLength, massDi
           color="#0f172a"
         />
 
-        <LabelBox x={cross.depthLine.labelX} y={cross.depthLine.labelY} text={`Dybde: ${depth.toFixed(2)} m`} />
-        <LabelBox x={cross.bottomWidthLine.labelX} y={cross.bottomWidthLine.labelY} text={`Bunnbredde: ${bottomWidth.toFixed(2)} m`} />
-        <LabelBox x={cross.topWidthLine.labelX} y={cross.topWidthLine.labelY} text={`Toppbredde: ${topWidth.toFixed(2)} m`} />
+        <LabelBox x={cross.depthLine.labelX} y={cross.depthLine.labelY} text={`Dybde: ${fmtMeter(depth, 2)} m`} />
+        <LabelBox x={cross.bottomWidthLine.labelX} y={cross.bottomWidthLine.labelY} text={`Bunnbredde: ${fmtMeter(bottomWidth, 2)} m`} />
+        <LabelBox x={cross.topWidthLine.labelX} y={cross.topWidthLine.labelY} text={`Toppbredde: ${fmtMeter(topWidth, 2)} m`} />
         <LabelBox
           x={(cross.trenchEdgeLeft.x + cross.spoilNearestEdge.x) / 2}
           y={(cross.trenchEdgeLeft.y + cross.spoilNearestEdge.y) / 2 - 2.5}
-          text={`Masser fra kant: ${massDistance.toFixed(2)} m`}
+          text={`Masser fra kant: ${fmtMeter(massDistance, 2)} m`}
           tone="accent"
         />
         <LabelBox
           x={(cross.trenchEdgeRight.x + cross.excavatorNearestTrackEdge.x) / 2}
           y={(cross.trenchEdgeRight.y + cross.excavatorNearestTrackEdge.y) / 2 - 2.5}
-          text={`Maskin fra kant: ${massDistance.toFixed(2)} m`}
+          text={`Maskin fra kant: ${fmtMeter(massDistance, 2)} m`}
           tone="accent"
         />
         <LabelBox x={79} y={12} text={`Sikring: ${method}`} tone="accent" />
@@ -114,17 +119,17 @@ export function TrenchSketch({ depth, bottomWidth, topWidth, routeLength, massDi
           color="#0f172a"
         />
 
-        <LabelBox x={plan.routeLengthLine.labelX} y={plan.routeLengthLine.labelY} text={`Trase lengde: ${routeLength.toFixed(0)} m`} />
+        <LabelBox x={plan.routeLengthLine.labelX} y={plan.routeLengthLine.labelY} text={`Trase lengde: ${fmtMeter(routeLength, 0)} m`} />
         <LabelBox
           x={(plan.trenchEdgeLeft.x + plan.spoilNearestEdge.x) / 2}
           y={(plan.trenchEdgeLeft.y + plan.spoilNearestEdge.y) / 2 - 2.5}
-          text={`Masser fra kant: ${massDistance.toFixed(2)} m`}
+          text={`Masser fra kant: ${fmtMeter(massDistance, 2)} m`}
           tone="accent"
         />
         <LabelBox
           x={(plan.trenchEdgeRight.x + plan.excavatorNearestTrackEdge.x) / 2}
           y={(plan.trenchEdgeRight.y + plan.excavatorNearestTrackEdge.y) / 2 - 2.5}
-          text={`Maskin fra kant: ${massDistance.toFixed(2)} m`}
+          text={`Maskin fra kant: ${fmtMeter(massDistance, 2)} m`}
           tone="accent"
         />
       </MeasurementSection>

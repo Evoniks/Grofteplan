@@ -19,8 +19,7 @@ type Props = {
 
 const WIDTH = 900;
 const HEIGHT = 390;
-const DRAG_KEYS = ["excavator", "masses", "pipe"] as const;
-type DragKey = (typeof DRAG_KEYS)[number];
+type DragKey = "excavator" | "masses" | "pipe";
 type Offset = { x: number; y: number };
 type Offsets = Record<DragKey, Offset>;
 type Bounds = { x: number; y: number; width: number; height: number };
@@ -291,11 +290,12 @@ export function CrossSectionCanvasSketch({
     const topWidthPx = 210 + (Math.min(safeTop, maxTopWidth) / maxTopWidth) * 190;
     const bottomWidthPx = Math.max(86, topWidthPx * Math.min(0.8, safeBottom / safeTop));
 
-    const normalizedMethod = method.toLowerCase();
+    const normalizedMethod = (method ?? "").toLowerCase();
+    const isNotRelevant = normalizedMethod.includes("ikke relevant");
     const isTrenchBox = normalizedMethod.includes("grøftekasse");
     const isSheetPile = normalizedMethod.includes("spunt");
     const isBraced = normalizedMethod.includes("avstivning") || normalizedMethod.includes("avstivet");
-    const isSloped = !isTrenchBox && !isSheetPile && !isBraced;
+    const isSloped = (!isTrenchBox && !isSheetPile && !isBraced) || isNotRelevant;
 
     const topLeftX = centerX - topWidthPx / 2;
     const topRightX = centerX + topWidthPx / 2;
@@ -315,15 +315,17 @@ export function CrossSectionCanvasSketch({
     const excavatorY = excavatorBaseY + offsets.excavator.y;
     const pipeX = pipeXBase + offsets.pipe.x;
     const pipeY = pipeYBase + offsets.pipe.y;
-    const slopeRule = isSloped
-      ? safeDepth <= 2
-        ? "Dybde x 0,5 (ca. 63°)"
-        : "Dybde x 0,75 (ca. 53°)"
-      : isTrenchBox
-        ? "Sikret med grøftekasse"
-        : isSheetPile
-          ? "Sikret med spunt"
-          : "Sikret med avstiving";
+    const slopeRule = isNotRelevant
+      ? "Ikke relevant"
+      : isSloped
+        ? safeDepth <= 2
+          ? "Dybde x 0,5 (ca. 63°)"
+          : "Dybde x 0,75 (ca. 53°)"
+        : isTrenchBox
+          ? "Sikret med grøftekasse"
+          : isSheetPile
+            ? "Sikret med spunt"
+            : "Sikret med avstiving";
 
     // Background
     ctx.clearRect(0, 0, WIDTH, HEIGHT);

@@ -11,7 +11,6 @@ export type ObjectType =
   | "excavatorTop"
   | "truckTop"
   | "spoilPile"
-  | "spoilPileLong"
   | "ladder"
   | "barrier"
   | "sheetPile"
@@ -23,6 +22,29 @@ export type ObjectType =
 export const EXCAVATOR_SIDE_PNG = "/skisse/excavator-side.png";
 export const EXCAVATOR_TOP_PNG = "/skisse/excavator-top.png";
 export const TRUCK_TOP_PNG = "/skisse/truck-top.png";
+/** Tverrprofil massehaug — bytt PNG-filene i `public/skisse/` med eigne illustrasjonar. */
+export const SPOIL_CROSS_JORD_PNG = "/skisse/spoil-cross-jord.png";
+export const SPOIL_CROSS_STEIN_PNG = "/skisse/spoil-cross-stein.png";
+
+/** Plan (1×1 m rute): fyll med dra — bytt PNG i `public/skisse/` (gjerne 50×50 px eller større, `slice` i ruta). */
+export const PLAN_TILE_JORD_PNG = "/skisse/plan-tile-jord.png";
+export const PLAN_TILE_STEIN_PNG = "/skisse/plan-tile-stein.png";
+export const PLAN_TILE_ASFALT_PNG = "/skisse/plan-tile-asfalt.png";
+
+/** Tverrprofil: spunt og grøftekasse — PNG med gjennomsiktig bakgrunn (`public/skisse/`). */
+export const SHEET_PILE_CROSS_PNG = "/skisse/sheet-pile-cross.png";
+export const TRENCH_BOX_CROSS_PNG = "/skisse/trench-box-cross.png";
+/** Plan: rømningsveg med stige — PNG med gjennomsiktig bakgrunn. */
+export const ESCAPE_ROUTE_PLAN_PNG = "/skisse/escape-route-plan.png";
+
+export type SpoilCrossMaterial = "jord" | "stein";
+
+/** Massefelt i plan (rutenett). */
+export type PlanTerrainMaterial = "jord" | "stein" | "asfalt";
+
+export function spoilCrossPngHref(material: SpoilCrossMaterial | undefined): string {
+  return material === "stein" ? SPOIL_CROSS_STEIN_PNG : SPOIL_CROSS_JORD_PNG;
+}
 
 /** Standard mål for side-gravemaskin (50 px = 1 m). Brukes til størrelseslider og fast proporsjon. */
 export const EXCAVATOR_SIDE_PRESET_WIDTH = 575;
@@ -30,20 +52,36 @@ export const EXCAVATOR_SIDE_PRESET_HEIGHT = 250;
 export const EXCAVATOR_SIDE_ASPECT = EXCAVATOR_SIDE_PRESET_HEIGHT / EXCAVATOR_SIDE_PRESET_WIDTH;
 
 /**
- * SVG filter: A' = k − (R+G+B) i normalisert sRGB. Gjer kvit/lys grå (inkl. «bake-in» rutenett) gjennomsiktig;
- * mettede fargar på køyretøy blir verande. Senk til ~2.68 om lyse flater blir for gjennomsiktige.
+ * SVG filter: A' = k − (R+G+B) i normalisert sRGB. Gjer kvit/lys grå (inkl. «bake-in» rutenett) gjennomsiktig.
+ * Låg k gjer òg lys gul/grå på sjølve teikninga «spøkjelses»-gjennomsiktig — 2,88 er eit kompromiss mot kvit bakgrunn.
+ * Senk til ~2,75 om rutenettet dukkar opp att; øk til ~2,92 om fargane framleis er for svake.
+ *
+ * Etter matrisa køyrer {@link RASTER_KNOCKOUT_ALPHA_BOOST_SLOPE} på alfa slik at køyretøyet vert nær heilt dekke.
+ *
+ * Gjennomsikt kant: **mask** (`mask-type="alpha"`) frå ufiltrert PNG over det filtrerte biletet.
  */
-export const EXCAVATOR_SIDE_LIGHT_BG_KNOCKOUT = 2.72;
+export const EXCAVATOR_SIDE_LIGHT_BG_KNOCKOUT = 2.88;
+
+/** Lineær alfa etter knockout: ut = slope × inn (clampa 0–1). Senk om lys grått rutenett blir for synleg. */
+export const RASTER_KNOCKOUT_ALPHA_BOOST_SLOPE = 2.35;
 
 function RasterAssetIcon(props: IconProps & { href: string }) {
   const { href, x, y, width, height, ...frameRest } = props;
-  const filterId = `raster-knock-${useId().replace(/:/g, "")}`;
+  const sid = useId().replace(/:/g, "");
+  const maskId = `raster-alpha-${sid}`;
+  const filterId = `raster-knock-${sid}`;
   const knockoutValues = `1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  -1 -1 -1 0 ${EXCAVATOR_SIDE_LIGHT_BG_KNOCKOUT}`;
   return (
     <IconFrame {...frameRest} x={x} y={y} width={width} height={height} withShadow={false}>
       <defs>
+        <mask id={maskId} maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" {...{ "mask-type": "alpha" }}>
+          <image href={href} x={x} y={y} width={width} height={height} preserveAspectRatio="xMidYMid meet" />
+        </mask>
         <filter id={filterId} x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
-          <feColorMatrix in="SourceGraphic" type="matrix" values={knockoutValues} />
+          <feColorMatrix in="SourceGraphic" type="matrix" values={knockoutValues} result="knockRgb" />
+          <feComponentTransfer in="knockRgb" colorInterpolationFilters="sRGB">
+            <feFuncA type="linear" slope={RASTER_KNOCKOUT_ALPHA_BOOST_SLOPE} intercept={0} />
+          </feComponentTransfer>
         </filter>
       </defs>
       <image
@@ -54,6 +92,7 @@ function RasterAssetIcon(props: IconProps & { href: string }) {
         height={height}
         preserveAspectRatio="xMidYMid meet"
         filter={`url(#${filterId})`}
+        mask={`url(#${maskId})`}
       />
     </IconFrame>
   );
@@ -72,6 +111,9 @@ type IconProps = {
     slopeAngleRightDeg?: number;
     lengthMeters?: number;
     mirrored?: boolean;
+    spoilCrossMaterial?: SpoilCrossMaterial;
+    innerBottomWidthPx?: number;
+    innerTopWidthPx?: number;
   };
 };
 
@@ -146,31 +188,7 @@ export function TruckTopIcon(props: IconProps) {
 }
 
 export function SpoilPileIcon(props: IconProps) {
-  const { x, y, width, height } = props;
-  return (
-    <IconFrame {...props} withShadow={false}>
-      <polygon
-        points={`${x + width * 0.36},${y + height * 0.06} ${x + width * 0.64},${y + height * 0.06} ${x + width * 0.86},${y + height * 0.94} ${x + width * 0.14},${y + height * 0.94}`}
-        fill="#b08968"
-        stroke="#3f3f46"
-        strokeWidth={2}
-      />
-    </IconFrame>
-  );
-}
-
-export function SpoilPileLongIcon(props: IconProps) {
-  const { x, y, width, height } = props;
-  return (
-    <IconFrame {...props} withShadow={false}>
-      <polygon
-        points={`${x + width * 0.18},${y + height * 0.06} ${x + width * 0.82},${y + height * 0.06} ${x + width * 0.96},${y + height * 0.94} ${x + width * 0.04},${y + height * 0.94}`}
-        fill="#b08968"
-        stroke="#3f3f46"
-        strokeWidth={2}
-      />
-    </IconFrame>
-  );
+  return <RasterAssetIcon {...props} href={spoilCrossPngHref(props.meta?.spoilCrossMaterial)} />;
 }
 
 export function LadderIcon(props: IconProps) {
@@ -200,27 +218,11 @@ export function BarrierIcon(props: IconProps) {
 }
 
 export function SheetPileIcon(props: IconProps) {
-  const { x, y, width, height } = props;
-  return (
-    <IconFrame {...props}>
-      {/* Spunt: to tynne, vertikale elementer uten tverrliggere */}
-      <rect x={x + width * 0.16} y={y + height * 0.06} width={width * 0.08} height={height * 0.88} fill="#334155" stroke="#0f172a" strokeWidth={2} />
-      <rect x={x + width * 0.76} y={y + height * 0.06} width={width * 0.08} height={height * 0.88} fill="#334155" stroke="#0f172a" strokeWidth={2} />
-    </IconFrame>
-  );
+  return <RasterAssetIcon {...props} href={SHEET_PILE_CROSS_PNG} />;
 }
 
 export function TrenchBoxIcon(props: IconProps) {
-  const { x, y, width, height } = props;
-  return (
-    <IconFrame {...props}>
-      {/* Grøftekasse: samme prinsipp, men kraftigere enn spunt */}
-      <rect x={x + width * 0.14} y={y + height * 0.08} width={width * 0.12} height={height * 0.84} fill="#7c3aed" stroke="#4c1d95" strokeWidth={2} />
-      <rect x={x + width * 0.74} y={y + height * 0.08} width={width * 0.12} height={height * 0.84} fill="#7c3aed" stroke="#4c1d95" strokeWidth={2} />
-      <line x1={x + width * 0.26} y1={y + height * 0.22} x2={x + width * 0.74} y2={y + height * 0.22} stroke="#a78bfa" strokeWidth={4} />
-      <line x1={x + width * 0.26} y1={y + height * 0.78} x2={x + width * 0.74} y2={y + height * 0.78} stroke="#a78bfa" strokeWidth={4} />
-    </IconFrame>
-  );
+  return <RasterAssetIcon {...props} href={TRENCH_BOX_CROSS_PNG} />;
 }
 
 export function PipeIcon(props: IconProps) {
@@ -234,25 +236,7 @@ export function PipeIcon(props: IconProps) {
 }
 
 export function EscapeRouteIcon(props: IconProps) {
-  const { x, y, width, height } = props;
-  return (
-    <IconFrame {...props}>
-      <line x1={x + width * 0.24} y1={y + height * 0.18} x2={x + width * 0.14} y2={y + height * 0.86} stroke="#14532d" strokeWidth={4} />
-      <line x1={x + width * 0.64} y1={y + height * 0.18} x2={x + width * 0.54} y2={y + height * 0.86} stroke="#14532d" strokeWidth={4} />
-      {[0, 1, 2].map((i) => (
-        <line
-          key={i}
-          x1={x + width * 0.16}
-          y1={y + height * (0.36 + i * 0.16)}
-          x2={x + width * 0.58}
-          y2={y + height * (0.36 + i * 0.16)}
-          stroke="#22c55e"
-          strokeWidth={4}
-        />
-      ))}
-      <polygon points={`${x + width * 0.92},${y + height * 0.55} ${x + width * 0.7},${y + height * 0.38} ${x + width * 0.7},${y + height * 0.72}`} fill="#14532d" />
-    </IconFrame>
-  );
+  return <RasterAssetIcon {...props} href={ESCAPE_ROUTE_PLAN_PNG} />;
 }
 
 export function renderAssetIcon(type: ObjectType, props: IconProps) {
@@ -269,8 +253,6 @@ export function renderAssetIcon(type: ObjectType, props: IconProps) {
       return <TruckTopIcon {...props} />;
     case "spoilPile":
       return <SpoilPileIcon {...props} />;
-    case "spoilPileLong":
-      return <SpoilPileLongIcon {...props} />;
     case "ladder":
       return <LadderIcon {...props} />;
     case "barrier":
