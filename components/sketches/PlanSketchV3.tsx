@@ -464,13 +464,13 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
         // Lastebil ovenfra/nedanfrå: X til venstre for gravemaskinkroppen, Y tett inntil kroppen
         const truckEndXShift = Math.round(excavW * 0.30);
         // Lastebil ovenfra (rot=270 → dump peiker sørover mot gravemaskinen)
-        const truckAboveCY = Math.round(cy - excavH / 2 - 4 - truckW / 2);
+        const truckAboveCY = Math.round(cy - excavH / 2 + 30 - truckW / 2);
         const truckAbovePX = cx - truckEndXShift;
         const truckAboveBx = Math.round(truckAbovePX - truckW / 2);
         const truckAboveBy = Math.round(truckAboveCY - truckH / 2);
 
         // Lastebil nedanfrå (rot=90 → dump peiker nordover mot gravemaskinen)
-        const truckBelowCY = Math.round(cy + excavH / 2 + 4 + truckW / 2);
+        const truckBelowCY = Math.round(cy + excavH / 2 - 30 + truckW / 2);
         const truckBelowPX = cx - truckEndXShift;
         const truckBelowBx = Math.round(truckBelowPX - truckW / 2);
         const truckBelowBy = Math.round(truckBelowCY - truckH / 2);
@@ -520,13 +520,13 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
         // Lastebil ovenfra/nedanfrå: X til høgre for gravemaskinkroppen, Y tett inntil kroppen
         const truckEndXShift = Math.round(excavW * 0.30);
         // Lastebil ovenfra (rot=270 → dump peikar sørover mot gravemaskinen)
-        const truckAboveCY = Math.round(cy - excavH / 2 - 4 - truckW / 2);
+        const truckAboveCY = Math.round(cy - excavH / 2 + 30 - truckW / 2);
         const truckAbovePX = cx + truckEndXShift;
         const truckAboveBx = Math.round(truckAbovePX - truckW / 2);
         const truckAboveBy = Math.round(truckAboveCY - truckH / 2);
 
         // Lastebil nedanfrå (rot=90 → dump peikar nordover mot gravemaskinen)
-        const truckBelowCY = Math.round(cy + excavH / 2 + 4 + truckW / 2);
+        const truckBelowCY = Math.round(cy + excavH / 2 - 30 + truckW / 2);
         const truckBelowPX = cx + truckEndXShift;
         const truckBelowBx = Math.round(truckBelowPX - truckW / 2);
         const truckBelowBy = Math.round(truckBelowCY - truckH / 2);
