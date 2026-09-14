@@ -218,12 +218,16 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
   const leftPad  = dimMarginLeft + truckXMarginLeft  + leftEndPad;
   const rightPad = 28            + truckXMarginRight + rightEndPad;
   const topMarginBase = 44;
+  // Endemaskin-lastebil ovanfrå/nedanfrå: ankrast til gravemaskinkroppen (cy ± excavH/2).
+  // Lastebilen er X-forskyvd til venstre/høgre for grøfta → ingen visuell konflikt med grøfta.
+  // Nødvendig marg = lastebil-lengd + halvkropp-utstrekning frå trenchCY + klaring.
+  const endTruckVertExtra = Math.round(excavH / 2 + trenchTopWPx / 2 + 8);
   const topMargin    = hasEndTruckAbove
-    ? Math.max(topMarginBase, truckW + 8)
+    ? Math.max(topMarginBase, truckW + endTruckVertExtra)
     : topMarginBase;
   const bottomMarginBase = showMassehaugBelow ? 38 + massehaugWPx + massehaugDPx : 38;
   const bottomMargin = hasEndTruckBelow
-    ? Math.max(bottomMarginBase, truckW + 8)
+    ? Math.max(bottomMarginBase, truckW + endTruckVertExtra)
     : bottomMarginBase;
 
   const trenchX1 = leftPad;
@@ -457,17 +461,19 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
         const truckStraightBx = Math.round(truckStraightCX - truckW / 2);
         const truckStraightBy = Math.round(cy - truckH / 2);
 
-        // Lastebil ovenfra (rot=270 → dump peiker sørover mot grøftkanten)
-        const truckAboveCY = Math.round(trenchY1 - 4 - truckW / 2);
-        const truckAbovePX = cx;
-        const truckAboveBx = Math.round(truckAbovePX - truckH / 2);
-        const truckAboveBy = Math.round(truckAboveCY - truckW / 2);
+        // Lastebil ovenfra/nedanfrå: X til venstre for gravemaskinkroppen, Y tett inntil kroppen
+        const truckEndXShift = Math.round(excavW * 0.30);
+        // Lastebil ovenfra (rot=270 → dump peiker sørover mot gravemaskinen)
+        const truckAboveCY = Math.round(cy - excavH / 2 - 4 - truckW / 2);
+        const truckAbovePX = cx - truckEndXShift;
+        const truckAboveBx = Math.round(truckAbovePX - truckW / 2);
+        const truckAboveBy = Math.round(truckAboveCY - truckH / 2);
 
-        // Lastebil nedanfrå (rot=90 → dump peiker nordover mot grøftkanten)
-        const truckBelowCY = Math.round(trenchY2 + 4 + truckW / 2);
-        const truckBelowPX = cx;
-        const truckBelowBx = Math.round(truckBelowPX - truckH / 2);
-        const truckBelowBy = Math.round(truckBelowCY - truckW / 2);
+        // Lastebil nedanfrå (rot=90 → dump peiker nordover mot gravemaskinen)
+        const truckBelowCY = Math.round(cy + excavH / 2 + 4 + truckW / 2);
+        const truckBelowPX = cx - truckEndXShift;
+        const truckBelowBx = Math.round(truckBelowPX - truckW / 2);
+        const truckBelowBy = Math.round(truckBelowCY - truckH / 2);
 
         return (
           <g>
@@ -511,17 +517,19 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
         const truckStraightBx = Math.round(truckStraightCX - truckW / 2);
         const truckStraightBy = Math.round(cy - truckH / 2);
 
-        // Lastebil ovenfra (rot=270 → dump peikar sørover mot grøftkanten)
-        const truckAboveCY = Math.round(trenchY1 - 4 - truckW / 2);
-        const truckAbovePX = cx;
-        const truckAboveBx = Math.round(truckAbovePX - truckH / 2);
-        const truckAboveBy = Math.round(truckAboveCY - truckW / 2);
+        // Lastebil ovenfra/nedanfrå: X til høgre for gravemaskinkroppen, Y tett inntil kroppen
+        const truckEndXShift = Math.round(excavW * 0.30);
+        // Lastebil ovenfra (rot=270 → dump peikar sørover mot gravemaskinen)
+        const truckAboveCY = Math.round(cy - excavH / 2 - 4 - truckW / 2);
+        const truckAbovePX = cx + truckEndXShift;
+        const truckAboveBx = Math.round(truckAbovePX - truckW / 2);
+        const truckAboveBy = Math.round(truckAboveCY - truckH / 2);
 
-        // Lastebil nedanfrå (rot=90 → dump peikar nordover mot grøftkanten)
-        const truckBelowCY = Math.round(trenchY2 + 4 + truckW / 2);
-        const truckBelowPX = cx;
-        const truckBelowBx = Math.round(truckBelowPX - truckH / 2);
-        const truckBelowBy = Math.round(truckBelowCY - truckW / 2);
+        // Lastebil nedanfrå (rot=90 → dump peikar nordover mot gravemaskinen)
+        const truckBelowCY = Math.round(cy + excavH / 2 + 4 + truckW / 2);
+        const truckBelowPX = cx + truckEndXShift;
+        const truckBelowBx = Math.round(truckBelowPX - truckW / 2);
+        const truckBelowBy = Math.round(truckBelowCY - truckH / 2);
 
         return (
           <g>
