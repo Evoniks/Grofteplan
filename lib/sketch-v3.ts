@@ -145,6 +145,21 @@ export function isVerticalMethod(method: SecuringMethod): boolean {
   return method === "vertikal" || method === "groftekas" || method === "spunt" || method === "ingen";
 }
 
+/** Konfig for gravemaskin + lastebil ved enden av grøfta (venstre/høgre) */
+export interface ExcavEndConfig {
+  enabled: boolean;
+  truckStraight: boolean;   // lastebil rett inn frå enden
+  truckFromAbove: boolean;  // lastebil ovenfra (nord)
+  truckFromBelow: boolean;  // lastebil nedanfrå (sør)
+}
+
+export const defaultExcavEndConfig = (enabled: boolean): ExcavEndConfig => ({
+  enabled,
+  truckStraight: false,
+  truckFromAbove: false,
+  truckFromBelow: false,
+});
+
 /** Konfig for gravemaskin + lastebil på éi side av grøfta */
 export interface ExcavSideConfig {
   enabled: boolean;
@@ -175,6 +190,8 @@ export interface SketchV3Params {
   massehaugBelow: boolean;      // massehaug nedanfor grøfta i plan
   excavBelow: ExcavSideConfig;  // gravemaskin nedanfor grøfta
   excavAbove: ExcavSideConfig;  // gravemaskin ovanfor grøfta
+  excavLeft:  ExcavEndConfig;   // gravemaskin ved venstre ende av grøfta
+  excavRight: ExcavEndConfig;   // gravemaskin ved høgre ende av grøfta
   massehaugDistM: number;
   excavDistM: number;
   excavFacingFront: boolean;    // tverrsnitt: frontvendt gravemaskin

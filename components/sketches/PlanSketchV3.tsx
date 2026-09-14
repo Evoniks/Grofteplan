@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import type { SketchV3Params, ExcavSideConfig } from "@/lib/sketch-v3";
+import type { SketchV3Params, ExcavSideConfig, ExcavEndConfig } from "@/lib/sketch-v3";
 import {
   PX_PER_METER,
   TITLE_BLOCK_H,
@@ -81,16 +81,19 @@ function SideDraw({
   const truckRightBx = Math.round(truckRightCX - truckW / 2);
   const truckRightBy = Math.round(excavCy - truckH / 2);
 
-  // Lastebil RETT INN — bak hytta, dump mot gravemaskin
-  //   nedanfor (arm=270°/nord): hytte er sør → lastebil endå lenger sør, rot=270 (dump nord)
-  //   ovanfor  (arm=90°/sør):  hytte er nord → lastebil endå lenger nord, rot=90  (dump sør)
-  const truckStraightCX  = excavCx;
+  // Lastebil RETT INN — rygg inn, lasteplan tett mot hytta (4 px klaring)
+  //   nedanfor (arm=270°/nord): hytte er sør → dump mot hytta (nord), rot=270
+  //   ovanfor  (arm=90°/sør):  hytte er nord → dump mot hytta (sør), rot=90
+  // Kompensar for visuelt tyngdepunkt i PNG: gravemaskin 52.5 % frå top (↓ = høgre etter rot 270°), lastebil 50.8 % (↑ = venstre etter rot 90°)
+  const truckStraightCX  = excavCx
+    + Math.round((538 - 512) / 1024 * excavH)
+    - Math.round((520 - 512) / 1024 * truckH);
   const truckStraightCY  = side === "below"
-    ? Math.round(excavCy + cabOffset + gap + truckW / 2)
-    : Math.round(excavCy - cabOffset - gap - truckW / 2);
+    ? Math.round(excavCy + 4 + truckW / 2)
+    : Math.round(excavCy - 4 - truckW / 2);
   const truckStraightBx  = Math.round(truckStraightCX - truckW / 2);
   const truckStraightBy  = Math.round(truckStraightCY - truckH / 2);
-  const truckStraightRot = side === "below" ? 270 : 90;
+  const truckStraightRot = side === "below" ? 90 : 270;
 
   // Lastebil FYRST (under), deretter gravemaskin (arm kjem over lastebilen)
   return (
@@ -159,6 +162,8 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
 
   const hasBelow = params.excavBelow.enabled;
   const hasAbove = params.excavAbove.enabled;
+  const hasLeft  = params.excavLeft?.enabled  ?? false;
+  const hasRight = params.excavRight?.enabled ?? false;
 
   const fracOf = (pos: "left" | "center" | "right") =>
     pos === "left" ? 0.2 : pos === "right" ? 0.8 : 0.5;
@@ -190,11 +195,36 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
   const showMassehaugAbove = params.showMassehaug;
   const showMassehaugBelow = params.massehaugBelow ?? false;
 
+  // Ekstra horisontalt rom for endemaskin + lastebil "rett inn frå enden"
+  // Belt-framkant (arm-sida) er 45 % av breidda frå arm-sida → 5 % av W frå senter.
+  const excavBeltNearH = Math.round(0.05 * excavW); // senter→belt-framkant (horisontal, rot=0/180)
+  const endExcavHalfW  = Math.round(excavW / 2);
+  const leftEndPad  = hasLeft
+    ? excavDPx + excavBeltNearH + endExcavHalfW +
+      ((params.excavLeft?.truckStraight  ?? false) ? (endExcavHalfW + 10 + truckW) : 0) + 8
+    : 0;
+  const rightEndPad = hasRight
+    ? excavDPx + excavBeltNearH + endExcavHalfW +
+      ((params.excavRight?.truckStraight ?? false) ? (endExcavHalfW + 10 + truckW) : 0) + 8
+    : 0;
+
+  // Ekstra vertikalt rom for endemasin-lastebil "ovenfra/nedenfra"
+  const hasEndTruckAbove = (hasLeft  && (params.excavLeft?.truckFromAbove  ?? false)) ||
+                           (hasRight && (params.excavRight?.truckFromAbove ?? false));
+  const hasEndTruckBelow = (hasLeft  && (params.excavLeft?.truckFromBelow  ?? false)) ||
+                           (hasRight && (params.excavRight?.truckFromBelow ?? false));
+
   const dimMarginLeft = (showMassehaugAbove || showMassehaugBelow) ? 52 : 36;
-  const leftPad  = dimMarginLeft + truckXMarginLeft;
-  const rightPad = 16            + truckXMarginRight;
-  const topMargin    = 44;
-  const bottomMargin = showMassehaugBelow ? 38 + massehaugWPx + massehaugDPx : 38;
+  const leftPad  = dimMarginLeft + truckXMarginLeft  + leftEndPad;
+  const rightPad = 28            + truckXMarginRight + rightEndPad;
+  const topMarginBase = 44;
+  const topMargin    = hasEndTruckAbove
+    ? Math.max(topMarginBase, Math.round(truckW + excavH / 2 + 16))
+    : topMarginBase;
+  const bottomMarginBase = showMassehaugBelow ? 38 + massehaugWPx + massehaugDPx : 38;
+  const bottomMargin = hasEndTruckBelow
+    ? Math.max(bottomMarginBase, Math.round(truckW + excavH / 2 + 16))
+    : bottomMarginBase;
 
   const trenchX1 = leftPad;
   const trenchX2 = trenchX1 + trenchLenPx;
@@ -202,7 +232,7 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
 
   // ─── Y-layout ────────────────────────────────────────────────────────────────
   const beltNear = (rot: 0|90|180|270) =>
-    (rot === 90 || rot === 270) ? EXCAV_BODY_FRAC_X * excavW : EXCAV_BODY_FRAC_Y * excavH;
+    (rot === 90 || rot === 270) ? Math.round(excavH * 0.3) : EXCAV_BODY_FRAC_Y * excavH;
   const beltFarBelow = (rot: 0|90|180|270) =>
     rot === 90  ? EXCAV_ARM_REACH_FRAC * excavW :
     rot === 270 ? EXCAV_BODY_FRAC_X * excavW :
@@ -222,11 +252,11 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
   // Gravemaskin ovanfor — arm mot grøfta (rot=90), hytta peikar nord
   if (hasAbove) {
     const rot = params.excavAbove.rotation;
-    // Ekstra plass ovanfor for lastebil rett inn (nord for hytta)
     if (params.excavAbove.truckStraight) {
-      curY += truckGapPlan + truckW;
+      curY += excavDPx + Math.round(beltNear(rot)) + 4 + truckW;
+    } else {
+      curY += Math.round(beltFarAbove(rot)) + Math.round(beltNear(rot)) + excavDPx;
     }
-    curY += Math.round(beltFarAbove(rot)) + Math.round(beltNear(rot)) + excavDPx;
   }
 
   const trenchY1 = curY;
@@ -236,10 +266,10 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
   // Gravemaskin nedanfor — arm mot grøfta (rot=270), hytta peikar sør
   if (hasBelow) {
     const rot = params.excavBelow.rotation;
-    curY += excavDPx + Math.round(beltNear(rot)) + Math.round(beltFarBelow(rot));
-    // Lastebil rett inn: ekstra plass for lastebilen sør for hytta
     if (params.excavBelow.truckStraight) {
-      curY += truckGapPlan + truckW;
+      curY += excavDPx + Math.round(beltNear(rot)) + 4 + truckW;
+    } else {
+      curY += excavDPx + Math.round(beltNear(rot)) + Math.round(beltFarBelow(rot));
     }
   }
 
@@ -248,7 +278,7 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
   const massehaugBelowY2 = showMassehaugBelow ? massehaugBelowY1 + massehaugWPx : massehaugBelowY1;
   if (showMassehaugBelow) curY = massehaugBelowY2;
 
-  const svgContentH = curY + 38;
+  const svgContentH = curY + bottomMargin;
 
   // Faktiske Y-senter
   const excavAboveCY = hasAbove
@@ -373,7 +403,7 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
             <line x1={dx} y1={trenchY2} x2={dx} y2={beltEdgeY}
               stroke="#78350f" strokeWidth={1}
               markerStart={`url(#${mkId("arr-rev")})`} markerEnd={`url(#${mkId("arr")})`} />
-            <text x={dx + 3} y={my + 4} fontSize={8} fill="#78350f" textAnchor="start">
+            <text x={dx - 3} y={my + 4} fontSize={8} fill="#78350f" textAnchor="end">
               {params.excavDistM.toFixed(1)} m
             </text>
           </g>
@@ -389,23 +419,10 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
           <text x={ex} y={trenchY1 - 34} fontSize={7} fill="#1e3a8a" textAnchor="middle">Rømn.</text>
         </g>
       ))}
-      {escapeCount >= 2 && escapePosX[1] - escapePosX[0] > 24 && (() => {
-        const ex1 = escapePosX[0], ex2 = escapePosX[1];
-        const dy  = trenchY2 + Math.max(8, Math.round(excavDPx / 2));
-        return (
-          <g>
-            <line x1={ex1} y1={dy} x2={ex2} y2={dy} stroke="#1e3a8a" strokeWidth={1}
-              markerStart={`url(#${mkId("arr-rev")})`} markerEnd={`url(#${mkId("arr")})`} />
-            <text x={Math.round((ex1 + ex2) / 2)} y={dy - 4} fontSize={8} fill="#1e3a8a" textAnchor="middle">
-              {escapeSpacingM.toFixed(1)} m
-            </text>
-          </g>
-        );
-      })()}
-      <text x={trenchX2 + 8} y={trenchY1 + 14} fontSize={9} fill="#1e3a8a" fontWeight="bold">
+      <text x={trenchX2 - 8} y={trenchY1 + 14} fontSize={9} fill="#1e3a8a" fontWeight="bold" textAnchor="end">
         {escapeCount} rømningsvegar
       </text>
-      <text x={trenchX2 + 8} y={trenchY1 + 26} fontSize={8} fill="#6b7280">
+      <text x={trenchX2 - 8} y={trenchY1 + 26} fontSize={8} fill="#6b7280" textAnchor="end">
         maks {escapeSpacingM.toFixed(0)} m mellom
       </text>
 
@@ -424,6 +441,118 @@ export function PlanSketchV3({ params }: { params: SketchV3Params }) {
         excavW={excavW} excavH={excavH} truckW={truckW} truckH={truckH}
         trenchX1={trenchX1} filterId={filterId}
       />
+
+      {/* ─── Gravemaskin VENSTRE ENDE (rot=0, arm mot høgre/grøfta) ───────────── */}
+      {hasLeft && (() => {
+        const cfg = params.excavLeft!;
+        const trenchCY = Math.round((trenchY1 + trenchY2) / 2);
+        const cx = trenchX1 - excavDPx - excavBeltNearH;
+        const cy = trenchCY;
+        const bx = Math.round(cx - excavW / 2);
+        const by = Math.round(cy - excavH / 2);
+        const gap = 8;
+
+        // Lastebil rett inn (rot=180 → dump peiker mot gravemaskin til høgre)
+        const truckStraightCX = Math.round(cx - endExcavHalfW - 10 - truckW / 2);
+        const truckStraightBx = Math.round(truckStraightCX - truckW / 2);
+        const truckStraightBy = Math.round(cy - truckH / 2);
+
+        // Lastebil ovenfra/nedanfrå: sentrert over arm-sida av gravemaskina
+        const truckEndXShift = Math.round(excavW * 0.25);
+        // Lastebil ovenfra (rot=270 → dump peiker sørover mot gravemaskin)
+        const truckAboveCY = Math.round(cy - excavH / 2 - 4 - truckW / 2);
+        const truckAbovePX = cx + truckEndXShift;
+        const truckAboveBx = Math.round(truckAbovePX - truckH / 2);
+        const truckAboveBy = Math.round(truckAboveCY - truckW / 2);
+
+        // Lastebil nedanfrå (rot=90 → dump peiker nordover mot gravemaskin)
+        const truckBelowCY = Math.round(cy + excavH / 2 + 4 + truckW / 2);
+        const truckBelowPX = cx + truckEndXShift;
+        const truckBelowBx = Math.round(truckBelowPX - truckH / 2);
+        const truckBelowBy = Math.round(truckBelowCY - truckW / 2);
+
+        return (
+          <g>
+            {cfg.truckStraight && (
+              <VehiclePng href={TRUCK_TOP_PNG}
+                bx={truckStraightBx} by={truckStraightBy} W={truckW} H={truckH}
+                rotation={180} px={truckStraightCX} py={cy} filterId={filterId} />
+            )}
+            {cfg.truckFromAbove && (
+              <VehiclePng href={TRUCK_TOP_PNG}
+                bx={truckAboveBx} by={truckAboveBy} W={truckW} H={truckH}
+                rotation={270} px={truckAbovePX} py={truckAboveCY} filterId={filterId} />
+            )}
+            {cfg.truckFromBelow && (
+              <VehiclePng href={TRUCK_TOP_PNG}
+                bx={truckBelowBx} by={truckBelowBy} W={truckW} H={truckH}
+                rotation={90} px={truckBelowPX} py={truckBelowCY} filterId={filterId} />
+            )}
+            <VehiclePng href={EXCAVATOR_TOP_PNG}
+              bx={bx} by={by} W={excavW} H={excavH}
+              rotation={0} px={cx} py={cy} filterId={filterId} />
+            <text x={trenchX1 - leftEndPad + 6} y={cy + 4} fontSize={9} fill="#78350f" textAnchor="start">
+              Gravemaskin
+            </text>
+          </g>
+        );
+      })()}
+
+      {/* ─── Gravemaskin HØGRE ENDE (rot=180, arm mot venstre/grøfta) ──────────── */}
+      {hasRight && (() => {
+        const cfg = params.excavRight!;
+        const trenchCY = Math.round((trenchY1 + trenchY2) / 2);
+        const cx = trenchX2 + excavDPx + excavBeltNearH;
+        const cy = trenchCY;
+        const bx = Math.round(cx - excavW / 2);
+        const by = Math.round(cy - excavH / 2);
+        const gap = 8;
+
+        // Lastebil rett inn (rot=0 → dump peiker mot gravemaskin til venstre)
+        const truckStraightCX = Math.round(cx + endExcavHalfW + 10 + truckW / 2);
+        const truckStraightBx = Math.round(truckStraightCX - truckW / 2);
+        const truckStraightBy = Math.round(cy - truckH / 2);
+
+        // Lastebil ovenfra/nedanfrå: sentrert over arm-sida av gravemaskina (vestover for høgre-endemaskin)
+        const truckEndXShift = Math.round(excavW * 0.25);
+        // Lastebil ovenfra (rot=270 → dump peikar sørover)
+        const truckAboveCY = Math.round(cy - excavH / 2 - 4 - truckW / 2);
+        const truckAbovePX = cx - truckEndXShift;
+        const truckAboveBx = Math.round(truckAbovePX - truckH / 2);
+        const truckAboveBy = Math.round(truckAboveCY - truckW / 2);
+
+        // Lastebil nedanfrå (rot=90 → dump peikar nordover)
+        const truckBelowCY = Math.round(cy + excavH / 2 + 4 + truckW / 2);
+        const truckBelowPX = cx - truckEndXShift;
+        const truckBelowBx = Math.round(truckBelowPX - truckH / 2);
+        const truckBelowBy = Math.round(truckBelowCY - truckW / 2);
+
+        return (
+          <g>
+            {cfg.truckStraight && (
+              <VehiclePng href={TRUCK_TOP_PNG}
+                bx={truckStraightBx} by={truckStraightBy} W={truckW} H={truckH}
+                rotation={0} px={truckStraightCX} py={cy} filterId={filterId} />
+            )}
+            {cfg.truckFromAbove && (
+              <VehiclePng href={TRUCK_TOP_PNG}
+                bx={truckAboveBx} by={truckAboveBy} W={truckW} H={truckH}
+                rotation={270} px={truckAbovePX} py={truckAboveCY} filterId={filterId} />
+            )}
+            {cfg.truckFromBelow && (
+              <VehiclePng href={TRUCK_TOP_PNG}
+                bx={truckBelowBx} by={truckBelowBy} W={truckW} H={truckH}
+                rotation={90} px={truckBelowPX} py={truckBelowCY} filterId={filterId} />
+            )}
+            <VehiclePng href={EXCAVATOR_TOP_PNG}
+              bx={bx} by={by} W={excavW} H={excavH}
+              rotation={180} px={cx} py={cy} filterId={filterId} />
+            <text x={trenchX2 + rightEndPad - 6} y={cy + 4} fontSize={9} fill="#78350f" textAnchor="end">
+              Gravemaskin
+            </text>
+          </g>
+        );
+      })()}
 
       {/* ─── Massehaug NEDANFOR ─────────────────────────────────────────────── */}
       {showMassehaugBelow && (

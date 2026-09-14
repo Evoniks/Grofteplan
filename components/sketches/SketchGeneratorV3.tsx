@@ -15,6 +15,8 @@ import {
   type SecuringMethod,
   type SketchV3Params,
   type ExcavSideConfig,
+  type ExcavEndConfig,
+  defaultExcavEndConfig,
 } from "@/lib/sketch-v3";
 import { TrenchSketchV3 } from "@/components/sketches/TrenchSketchV3";
 import { PlanSketchV3 } from "@/components/sketches/PlanSketchV3";
@@ -101,9 +103,20 @@ function NavButtons({
 }
 
 type ExcavPos    = "below" | "above" | "both" | "ingen";
+type ExcavEndPos = "ingen" | "left" | "right" | "both";
 type TruckDir    = "ingen" | "left" | "right" | "straight";
+type TruckDirEnd = "ingen" | "straight" | "above" | "below";
 type MasseSide   = "above" | "below" | "both" | "ingen";
 type CrossSecPos = "right" | "front";
+
+function makeExcavEndConfig(enabled: boolean, dir: TruckDirEnd): ExcavEndConfig {
+  return {
+    enabled,
+    truckStraight:  dir === "straight",
+    truckFromAbove: dir === "above",
+    truckFromBelow: dir === "below",
+  };
+}
 
 function makeExcavConfig(
   enabled: boolean,
@@ -138,8 +151,12 @@ export function SketchGeneratorV3() {
   const [excavPos,      setExcavPos]      = useState<ExcavPos>("below");
   const [truckDirBelow, setTruckDirBelow] = useState<TruckDir>("ingen");
   const [truckDirAbove, setTruckDirAbove] = useState<TruckDir>("ingen");
+  const [excavEndPos,   setExcavEndPos]   = useState<ExcavEndPos>("ingen");
+  const [truckDirLeft,  setTruckDirLeft]  = useState<TruckDirEnd>("ingen");
+  const [truckDirRight, setTruckDirRight] = useState<TruckDirEnd>("ingen");
   const [masseSide,     setMasseSide]     = useState<MasseSide>("above");
   const [crossSecPos,   setCrossSecPos]   = useState<CrossSecPos>("right");
+  const [riggSubStep,   setRiggSubStep]   = useState(0);
 
   const svgRef = useRef<HTMLDivElement>(null);
 
@@ -154,6 +171,12 @@ export function SketchGeneratorV3() {
   const excavAbove = makeExcavConfig(
     excavPos === "above" || excavPos === "both", true, truckDirAbove
   );
+  const excavLeft  = makeExcavEndConfig(
+    excavEndPos === "left"  || excavEndPos === "both", truckDirLeft
+  );
+  const excavRight = makeExcavEndConfig(
+    excavEndPos === "right" || excavEndPos === "both", truckDirRight
+  );
 
   const params: SketchV3Params = {
     workType: workType ?? "va",
@@ -164,6 +187,8 @@ export function SketchGeneratorV3() {
     massehaugBelow:  masseSide === "below" || masseSide === "both",
     excavBelow,
     excavAbove,
+    excavLeft,
+    excavRight,
     groundType: groundType ?? "morene",
     securingMethod: activeMethod,
     massehaugDistM,
@@ -512,68 +537,172 @@ export function SketchGeneratorV3() {
           </div>
         </div>
 
-        {/* Rigg og køyretøy → planskisse */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
-          <h3 className="font-bold text-slate-800 text-sm">Rigg og køyretøy</h3>
+        {/* Rigg og køyretøy — stegvis */}
+        {(() => {
+          type RiggKey = "excavator" | "excavator-end" | "massehaug" | "truck-above" | "truck-below" | "truck-left" | "truck-right" | "done";
+          const riggKeys: Exclude<RiggKey, "done">[] = [
+            "excavator",
+            "excavator-end",
+            "massehaug",
+            ...(excavPos === "above" || excavPos === "both"           ? (["truck-above"] as const)  : []),
+            ...(excavPos === "below" || excavPos === "both"           ? (["truck-below"] as const)  : []),
+            ...(excavEndPos === "left"  || excavEndPos === "both"     ? (["truck-left"]  as const)  : []),
+            ...(excavEndPos === "right" || excavEndPos === "both"     ? (["truck-right"] as const)  : []),
+          ];
+          const total = riggKeys.length;
+          const idx = Math.min(riggSubStep, total);
+          const current: RiggKey = idx < total ? riggKeys[idx] : "done";
 
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Gravemaskin</p>
-            <div className="flex gap-2">
-              <ChoiceBtn val="below" current={excavPos} onClick={setExcavPos}>
-                ↓<br /><span className="text-xs font-normal">Nedanfor</span>
-              </ChoiceBtn>
-              <ChoiceBtn val="above" current={excavPos} onClick={setExcavPos}>
-                ↑<br /><span className="text-xs font-normal">Ovanfor</span>
-              </ChoiceBtn>
-              <ChoiceBtn val="both" current={excavPos} onClick={setExcavPos}>
-                ↕<br /><span className="text-xs font-normal">Begge sider</span>
-              </ChoiceBtn>
-              <ChoiceBtn val="ingen" current={excavPos} onClick={setExcavPos}>
-                —<br /><span className="text-xs font-normal">Ingen</span>
-              </ChoiceBtn>
+          const EXCAV_LABELS:     Record<ExcavPos,    string> = { below: "Nedanfor", above: "Ovanfor", both: "Begge sider", ingen: "Ingen" };
+          const EXCAV_END_LABELS: Record<ExcavEndPos, string> = { left: "Venstre ende", right: "Høgre ende", both: "Begge endar", ingen: "Ingen" };
+          const MASSE_LABELS:     Record<MasseSide,   string> = { above: "Ovanfor", below: "Nedanfor", both: "Begge sider", ingen: "Ingen" };
+          const TRUCK_LABELS:     Record<TruckDir,    string> = { ingen: "Ingen", left: "Frå venstre", right: "Frå høgre", straight: "Rett inn" };
+          const TRUCK_END_LABELS: Record<TruckDirEnd, string> = { ingen: "Ingen", straight: "Rett inn frå enden", above: "Inn ovenfra", below: "Inn nedenfra" };
+
+          const BtnNext = ({ label = "Neste →" }: { label?: string }) => (
+            <button onClick={() => setRiggSubStep(s => s + 1)}
+              className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors">
+              {label}
+            </button>
+          );
+          const BtnBack = () => (
+            <button onClick={() => setRiggSubStep(s => s - 1)}
+              className="px-4 py-2 text-sm text-slate-500 hover:text-slate-800 transition-colors">
+              ← Tilbake
+            </button>
+          );
+
+          return (
+            <div className="bg-white border border-slate-200 rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-800 text-sm">Rigg og køyretøy</h3>
+                {current !== "done" && (
+                  <div className="flex gap-1.5">
+                    {riggKeys.map((_, i) => (
+                      <button key={i} onClick={() => setRiggSubStep(i)}
+                        className={`w-2 h-2 rounded-full transition-colors
+                          ${i === idx ? "bg-brand-600" : i < idx ? "bg-brand-300" : "bg-slate-200"}`} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {current === "excavator" && (
+                <>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Gravemaskin — langs sida</p>
+                  <div className="flex gap-2">
+                    <ChoiceBtn val="below" current={excavPos} onClick={setExcavPos}>↓<br /><span className="text-xs font-normal">Nedanfor</span></ChoiceBtn>
+                    <ChoiceBtn val="above" current={excavPos} onClick={setExcavPos}>↑<br /><span className="text-xs font-normal">Ovanfor</span></ChoiceBtn>
+                    <ChoiceBtn val="both"  current={excavPos} onClick={setExcavPos}>↕<br /><span className="text-xs font-normal">Begge sider</span></ChoiceBtn>
+                    <ChoiceBtn val="ingen" current={excavPos} onClick={setExcavPos}>—<br /><span className="text-xs font-normal">Ingen</span></ChoiceBtn>
+                  </div>
+                  <div className="flex justify-end mt-4"><BtnNext /></div>
+                </>
+              )}
+
+              {current === "excavator-end" && (
+                <>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Gravemaskin — ved enden</p>
+                  <div className="flex gap-2">
+                    <ChoiceBtn val="ingen" current={excavEndPos} onClick={setExcavEndPos}>—<br /><span className="text-xs font-normal">Ingen</span></ChoiceBtn>
+                    <ChoiceBtn val="left"  current={excavEndPos} onClick={setExcavEndPos}>←<br /><span className="text-xs font-normal">Venstre ende</span></ChoiceBtn>
+                    <ChoiceBtn val="right" current={excavEndPos} onClick={setExcavEndPos}>→<br /><span className="text-xs font-normal">Høgre ende</span></ChoiceBtn>
+                    <ChoiceBtn val="both"  current={excavEndPos} onClick={setExcavEndPos}>↔<br /><span className="text-xs font-normal">Begge endar</span></ChoiceBtn>
+                  </div>
+                  <div className="flex items-center justify-between mt-4"><BtnBack /><BtnNext /></div>
+                </>
+              )}
+
+              {current === "massehaug" && (
+                <>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Massehaug</p>
+                  <div className="flex gap-2">
+                    <ChoiceBtn val="above" current={masseSide} onClick={setMasseSide}>↑<br /><span className="text-xs font-normal">Ovanfor</span></ChoiceBtn>
+                    <ChoiceBtn val="below" current={masseSide} onClick={setMasseSide}>↓<br /><span className="text-xs font-normal">Nedanfor</span></ChoiceBtn>
+                    <ChoiceBtn val="both"  current={masseSide} onClick={setMasseSide}>↕<br /><span className="text-xs font-normal">Begge sider</span></ChoiceBtn>
+                    <ChoiceBtn val="ingen" current={masseSide} onClick={setMasseSide}>—<br /><span className="text-xs font-normal">Ingen</span></ChoiceBtn>
+                  </div>
+                  <div className="flex items-center justify-between mt-4"><BtnBack /><BtnNext /></div>
+                </>
+              )}
+
+              {current === "truck-above" && (
+                <>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Lastebil — ovanfor grøft</p>
+                  <TruckButtons dir={truckDirAbove} setDir={setTruckDirAbove} />
+                  <div className="flex items-center justify-between mt-4"><BtnBack /><BtnNext /></div>
+                </>
+              )}
+
+              {current === "truck-below" && (
+                <>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Lastebil — nedanfor grøft</p>
+                  <TruckButtons dir={truckDirBelow} setDir={setTruckDirBelow} />
+                  <div className="flex items-center justify-between mt-4"><BtnBack /><BtnNext /></div>
+                </>
+              )}
+
+              {current === "truck-left" && (
+                <>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Lastebil — venstre ende</p>
+                  <div className="flex gap-2">
+                    <ChoiceBtn val="ingen"    current={truckDirLeft} onClick={setTruckDirLeft}>—<br /><span className="text-xs font-normal">Ingen</span></ChoiceBtn>
+                    <ChoiceBtn val="straight" current={truckDirLeft} onClick={setTruckDirLeft}>←<br /><span className="text-xs font-normal">Inn frå venstre</span></ChoiceBtn>
+                    <ChoiceBtn val="above"    current={truckDirLeft} onClick={setTruckDirLeft}>↑<br /><span className="text-xs font-normal">Inn ovenfra</span></ChoiceBtn>
+                    <ChoiceBtn val="below"    current={truckDirLeft} onClick={setTruckDirLeft}>↓<br /><span className="text-xs font-normal">Inn nedenfra</span></ChoiceBtn>
+                  </div>
+                  <div className="flex items-center justify-between mt-4"><BtnBack /><BtnNext /></div>
+                </>
+              )}
+
+              {current === "truck-right" && (
+                <>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Lastebil — høgre ende</p>
+                  <div className="flex gap-2">
+                    <ChoiceBtn val="ingen"    current={truckDirRight} onClick={setTruckDirRight}>—<br /><span className="text-xs font-normal">Ingen</span></ChoiceBtn>
+                    <ChoiceBtn val="straight" current={truckDirRight} onClick={setTruckDirRight}>→<br /><span className="text-xs font-normal">Inn frå høgre</span></ChoiceBtn>
+                    <ChoiceBtn val="above"    current={truckDirRight} onClick={setTruckDirRight}>↑<br /><span className="text-xs font-normal">Inn ovenfra</span></ChoiceBtn>
+                    <ChoiceBtn val="below"    current={truckDirRight} onClick={setTruckDirRight}>↓<br /><span className="text-xs font-normal">Inn nedenfra</span></ChoiceBtn>
+                  </div>
+                  <div className="flex items-center justify-between mt-4"><BtnBack /><BtnNext label="Ferdig ✓" /></div>
+                </>
+              )}
+
+              {current === "done" && (
+                <div className="flex items-start justify-between gap-4">
+                  <dl className="space-y-1">
+                    <div className="flex gap-2 text-xs"><dt className="text-slate-400 w-32 shrink-0">Gravemaskin</dt><dd className="text-slate-700 font-medium">{EXCAV_LABELS[excavPos]}</dd></div>
+                    {excavEndPos !== "ingen" && (
+                      <div className="flex gap-2 text-xs"><dt className="text-slate-400 w-32 shrink-0">Gr. ved ende</dt><dd className="text-slate-700 font-medium">{EXCAV_END_LABELS[excavEndPos]}</dd></div>
+                    )}
+                    <div className="flex gap-2 text-xs"><dt className="text-slate-400 w-32 shrink-0">Massehaug</dt><dd className="text-slate-700 font-medium">{MASSE_LABELS[masseSide]}</dd></div>
+                    {(excavPos === "above" || excavPos === "both") && (
+                      <div className="flex gap-2 text-xs"><dt className="text-slate-400 w-32 shrink-0">Lastebil ovanfor</dt><dd className="text-slate-700 font-medium">{TRUCK_LABELS[truckDirAbove]}</dd></div>
+                    )}
+                    {(excavPos === "below" || excavPos === "both") && (
+                      <div className="flex gap-2 text-xs"><dt className="text-slate-400 w-32 shrink-0">Lastebil nedanfor</dt><dd className="text-slate-700 font-medium">{TRUCK_LABELS[truckDirBelow]}</dd></div>
+                    )}
+                    {(excavEndPos === "left" || excavEndPos === "both") && (
+                      <div className="flex gap-2 text-xs"><dt className="text-slate-400 w-32 shrink-0">Lastebil venstre</dt><dd className="text-slate-700 font-medium">{TRUCK_END_LABELS[truckDirLeft]}</dd></div>
+                    )}
+                    {(excavEndPos === "right" || excavEndPos === "both") && (
+                      <div className="flex gap-2 text-xs"><dt className="text-slate-400 w-32 shrink-0">Lastebil høgre</dt><dd className="text-slate-700 font-medium">{TRUCK_END_LABELS[truckDirRight]}</dd></div>
+                    )}
+                  </dl>
+                  <button onClick={() => setRiggSubStep(0)}
+                    className="px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-xs hover:border-slate-300 shrink-0 transition-colors">
+                    Endre
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
+          );
+        })()}
 
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Massehaug</p>
-            <div className="flex gap-2">
-              <ChoiceBtn val="above" current={masseSide} onClick={setMasseSide}>
-                ↑<br /><span className="text-xs font-normal">Ovanfor</span>
-              </ChoiceBtn>
-              <ChoiceBtn val="below" current={masseSide} onClick={setMasseSide}>
-                ↓<br /><span className="text-xs font-normal">Nedanfor</span>
-              </ChoiceBtn>
-              <ChoiceBtn val="both" current={masseSide} onClick={setMasseSide}>
-                ↕<br /><span className="text-xs font-normal">Begge sider</span>
-              </ChoiceBtn>
-              <ChoiceBtn val="ingen" current={masseSide} onClick={setMasseSide}>
-                —<br /><span className="text-xs font-normal">Ingen</span>
-              </ChoiceBtn>
-            </div>
-          </div>
-
-          {(excavPos === "below" || excavPos === "both") && (
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                Lastebil{excavPos === "both" ? " — nedanfor grøft" : ""}
-              </p>
-              <TruckButtons dir={truckDirBelow} setDir={setTruckDirBelow} />
-            </div>
-          )}
-
-          {(excavPos === "above" || excavPos === "both") && (
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                Lastebil{excavPos === "both" ? " — ovanfor grøft" : ""}
-              </p>
-              <TruckButtons dir={truckDirAbove} setDir={setTruckDirAbove} />
-            </div>
-          )}
-
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-              Avstand frå grøftkant
-            </p>
+        {/* Avstand frå grøftkant — alltid synleg */}
+        {excavPos !== "ingen" && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Avstand frå grøftkant</p>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => { setExcavDistM(m => Math.max(0.5, Math.round((m - 0.5) * 10) / 10)); setMassehaugDistM(m => Math.max(0.5, Math.round((m - 0.5) * 10) / 10)); }}
@@ -584,12 +713,10 @@ export function SketchGeneratorV3() {
                 onClick={() => { setExcavDistM(m => Math.min(5.0, Math.round((m + 0.5) * 10) / 10)); setMassehaugDistM(m => Math.min(5.0, Math.round((m + 0.5) * 10) / 10)); }}
                 className="w-10 h-10 rounded-xl border-2 border-slate-200 text-slate-700 hover:bg-slate-100 text-xl font-bold flex items-center justify-center"
               >+</button>
-              {excavDistM < 1.0 && (
-                <span className="text-xs text-amber-600">⚠️ Under min. 1 m</span>
-              )}
+              {excavDistM < 1.0 && <span className="text-xs text-amber-600">⚠️ Under min. 1 m</span>}
             </div>
           </div>
-        </div>
+        )}
 
         <div id="plan-print-area"
           className="bg-white border border-slate-200 rounded-2xl p-3">
